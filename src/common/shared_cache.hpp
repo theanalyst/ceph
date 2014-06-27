@@ -187,16 +187,15 @@ public:
     {
       Mutex::Locker l(lock);
       typename map<K, WeakVPtr>::iterator actual = weak_refs.lower_bound(key);
-      typename map<K, WeakVPtr>::iterator prev = actual;
-      if (actual != weak_refs.end()) {
-        ++actual;
-        if (actual != weak_refs.end() && actual->first == key) {
-          *existed = true;
-          return actual->second.lock();
-        }
+      if (actual != weak_refs.end() && actual->first == key) {
+         
+        *existed = true;
+        return actual->second.lock();
       }
+      
       *existed = false;
-      weak_refs.insert(prev, make_pair(key, val));
+
+      weak_refs.insert(actual, make_pair(key, val));
       lru_add(key, val, &to_release);
     }
     return val;
