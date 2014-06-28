@@ -181,19 +181,21 @@ public:
    * map, false otherwise
    * @return A reference to the map's value for the given key
    */
-  VPtr add(K key, V *value, bool *existed) {
+  VPtr add(K key, V *value, bool *existed = NULL) {
     VPtr val(value, Cleanup(this, key));
     list<VPtr> to_release;
     {
       Mutex::Locker l(lock);
       typename map<K, WeakVPtr>::iterator actual = weak_refs.lower_bound(key);
       if (actual != weak_refs.end() && actual->first == key) {
-         
-        *existed = true;
+        if (existed) 
+          *existed = true;
+
         return actual->second.lock();
       }
-      
-      *existed = false;
+
+      if (existed)      
+        *existed = false;
 
       weak_refs.insert(actual, make_pair(key, val));
       lru_add(key, val, &to_release);
