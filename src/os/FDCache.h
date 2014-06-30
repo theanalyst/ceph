@@ -50,7 +50,7 @@ public:
 
 private:
   CephContext *cct;
-  int registry_shards;
+  const int registry_shards;
   SharedLRU<ghobject_t, FD> *registry;
 
 public:
