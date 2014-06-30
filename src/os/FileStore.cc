@@ -183,9 +183,8 @@ int FileStore::lfn_find(coll_t cid, const ghobject_t& oid, IndexedPath *path)
 
 int FileStore::lfn_truncate(coll_t cid, const ghobject_t& oid, off_t length)
 {
-  IndexedPath path;
   FDRef fd;
-  int r = lfn_open(cid, oid, false, &fd, &path);
+  int r = lfn_open(cid, oid, false, &fd);
   if (r < 0)
     return r;
   r = ::ftruncate(**fd, length);
@@ -214,9 +213,7 @@ int FileStore::lfn_stat(coll_t cid, const ghobject_t& oid, struct stat *buf)
 int FileStore::lfn_open(coll_t cid,
 			const ghobject_t& oid,
 			bool create,
-			FDRef *outfd,
-			IndexedPath *path,
-			Index *index) 
+			FDRef *outfd)
 {
   assert(get_allow_sharded_objects() ||
 	 ( oid.shard_id == shard_id_t::NO_SHARD &&
@@ -226,13 +223,9 @@ int FileStore::lfn_open(coll_t cid,
   if (create)
     flags |= O_CREAT;
   Index index2;
-  if (!index) {
-    index = &index2;
-  }
+  Index *index = &index2;
   int r = 0;
-  if (!(*index)) {
-    r = get_index(cid, index);
-  }
+  r = get_index(cid, index);
 
   int fd, exist;
   if (!replaying) {
@@ -244,8 +237,7 @@ int FileStore::lfn_open(coll_t cid,
 
   {
     IndexedPath path2;
-    if (!path)
-      path = &path2;
+    IndexedPath *path = &path2;
     if (r < 0) {
       derr << "error getting collection index for " << cid
 	   << ": " << cpp_strerror(-r) << dendl;
@@ -2895,13 +2887,11 @@ int FileStore::_clone(coll_t cid, const ghobject_t& oldoid, const ghobject_t& ne
   int r;
   FDRef o, n;
   {
-    Index index;
-    IndexedPath from, to;
-    r = lfn_open(cid, oldoid, false, &o, &from, &index);
+    r = lfn_open(cid, oldoid, false, &o);
     if (r < 0) {
       goto out2;
     }
-    r = lfn_open(cid, newoid, true, &n, &to, &index);
+    r = lfn_open(cid, newoid, true, &n);
     if (r < 0) {
       goto out;
     }
