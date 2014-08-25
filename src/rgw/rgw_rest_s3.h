@@ -63,7 +63,7 @@ public:
   ~RGWGetBucketLocation_ObjStore_S3() {}
 
   void send_response();
-}
+};
 
 class RGWStatBucket_ObjStore_S3 : public RGWStatBucket_ObjStore {
 public:
