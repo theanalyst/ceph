@@ -310,6 +310,11 @@ void RGWGetBucketLocation_ObjStore_S3::send_response()
 
   s->formatter->open_object_section_in_ns("LocationConstraint",
 					  "http://doc.s3.amazonaws.com/doc/2006-03-01/");
+
+  const char* location_constraint = s->bucket_info.region.c_str();
+  if (strcmp(location_constraint,"default") != 0)
+    s->formatter->write_raw_data(location_constraint);
+
   s->formatter->close_section();
   rgw_flush_formatter_and_reset(s, s->formatter);
 }
