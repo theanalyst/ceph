@@ -417,6 +417,26 @@ void XMLFormatter::dump_format(const char *name, const char *fmt, ...)
     m_ss << "\n";
 }
 
+void XMLFormatter::dump_format_ns(const char* name, const char *ns, const char *fmt, ...)
+{
+  char buf[LARGE_SIZE];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(buf, LARGE_SIZE, fmt, ap);
+  va_end(ap);
+
+  std::string e(name);
+  print_spaces();
+  if (ns) {
+    m_ss << "<" << e  << " xmlns=\"" << ns << "\">" << buf << "</" << e << ">";
+  } else {
+    m_ss << "<" << e << ">" << buf << "</" << e << ">";
+  }
+
+  if (m_pretty)
+    m_ss << "\n";
+}
+
 void XMLFormatter::dump_format_unquoted(const char *name, const char *fmt, ...)
 {
   char buf[LARGE_SIZE];
