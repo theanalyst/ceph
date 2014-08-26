@@ -305,17 +305,17 @@ void RGWGetBucketLogging_ObjStore_S3::send_response()
 void RGWGetBucketLocation_ObjStore_S3::send_response()
 {
   dump_errno(s);
-  end_header(s, this, "application/xml");
+  end_header(s, this);
   dump_start(s);
 
-  s->formatter->open_object_section_in_ns("LocationConstraint",
-					  "http://doc.s3.amazonaws.com/doc/2006-03-01/");
+  string location_constraint(s->bucket_info.region);
+  if (s->bucket_info.region == "default")
+    location_constraint.clear();
 
-  const char* location_constraint = s->bucket_info.region.c_str();
-  if (strcmp(location_constraint,"default") != 0)
-    s->formatter->write_raw_data(location_constraint);
+  s->formatter->dump_format_ns("LocationConstraint",
+			       "http://doc.s3.amazonaws.com/doc/2006-03-01/",
+			       "%s",location_constraint.c_str());
 
-  s->formatter->close_section();
   rgw_flush_formatter_and_reset(s, s->formatter);
 }
 
