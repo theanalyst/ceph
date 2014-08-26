@@ -245,7 +245,8 @@ public:
 
 class RGWGetBucketLocation : public RGWOp {
 public:
-  RGWGetBucketLogging() {}
+  RGWGetBucketLocation() {}
+  ~RGWGetBucketLocation() {}
   int verify_permission();
   void execute() {}
 
