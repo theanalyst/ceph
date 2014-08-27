@@ -255,6 +255,21 @@ void JSONFormatter::dump_format(const char *name, const char *fmt, ...)
   print_quoted_string(buf);
 }
 
+void JSONFormatter:: dump_format_ns(const char *name, const char *ns, const char *fmt, ...)
+{
+  char buf[LARGE_SIZE];
+  va_list ap;
+  va_start(ap, fmt);
+  vsn_printf(buf, LARGE_SIZE, fmt, ap);
+  va_end(ap);
+
+  std::ostringstream oss;
+  oss << name << " " << ns;
+  print_quoted_string(buf);
+
+}
+
+
 void JSONFormatter::dump_format_unquoted(const char *name, const char *fmt, ...)
 {
   char buf[LARGE_SIZE];

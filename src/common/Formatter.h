@@ -85,6 +85,7 @@ class JSONFormatter : public Formatter {
   std::ostream& dump_stream(const char *name);
   void dump_format(const char *name, const char *fmt, ...);
   void dump_format_unquoted(const char *name, const char *fmt, ...);
+  void dump_format_ns(const char*name, const char *ns, const char *fmt, ...);
   int get_len() const;
   void write_raw_data(const char *data);
 
