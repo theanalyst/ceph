@@ -308,14 +308,13 @@ void RGWGetBucketLocation_ObjStore_S3::send_response()
   end_header(s, this);
   dump_start(s);
 
-  if (s->bucket_info.region != "default")
-    const char* fmt = "%s";
-  else
-    const char* fmt = "%.0s";
+  string location_constraint(s->bucket_info.region)
+  if (s->bucket_info.region == "default")
+    location_constraint.clear()
 
   s->formatter->dump_format_ns("LocationConstraint",
 			       "http://doc.s3.amazonaws.com/doc/2006-03-01/",
-			       fmt,s->bucket_info.region)
+			       "%s",location_constraint)
 
   rgw_flush_formatter_and_reset(s, s->formatter);
 }
