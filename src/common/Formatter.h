@@ -49,6 +49,7 @@ class Formatter {
   }
   virtual std::ostream& dump_stream(const char *name) = 0;
   virtual void dump_format(const char *name, const char *fmt, ...) = 0;
+  virtual void dump_format_ns(const char *name, const char *ns, const char *fmt, ...);
   virtual void dump_format_unquoted(const char *name, const char *fmt, ...) = 0;
   virtual int get_len() const = 0;
   virtual void write_raw_data(const char *data) = 0;
