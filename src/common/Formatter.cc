@@ -260,7 +260,7 @@ void JSONFormatter:: dump_format_ns(const char *name, const char *ns, const char
   char buf[LARGE_SIZE];
   va_list ap;
   va_start(ap, fmt);
-  vsn_printf(buf, LARGE_SIZE, fmt, ap);
+  vsnprintf(buf, LARGE_SIZE, fmt, ap);
   va_end(ap);
 
   std::ostringstream oss;
