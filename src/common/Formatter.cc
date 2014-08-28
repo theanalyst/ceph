@@ -243,18 +243,6 @@ std::ostream& JSONFormatter::dump_stream(const char *name)
   return m_pending_string;
 }
 
-void JSONFormatter::dump_format(const char *name, const char *fmt, ...)
-{
-  char buf[LARGE_SIZE];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(buf, LARGE_SIZE, fmt, ap);
-  va_end(ap);
-
-  print_name(name);
-  print_quoted_string(buf);
-}
-
 void JSONFormatter:: dump_format_ns(const char *name, const char *ns, const char *fmt, ...)
 {
   char buf[LARGE_SIZE];
@@ -263,8 +251,7 @@ void JSONFormatter:: dump_format_ns(const char *name, const char *ns, const char
   vsnprintf(buf, LARGE_SIZE, fmt, ap);
   va_end(ap);
 
-  std::ostringstream oss;
-  oss << name << " " << ns;
+  print_name(name);
   print_quoted_string(buf);
 
 }
@@ -415,21 +402,6 @@ std::ostream& XMLFormatter::dump_stream(const char *name)
   m_pending_string_name = name;
   m_ss << "<" << m_pending_string_name << ">";
   return m_pending_string;
-}
-
-void XMLFormatter::dump_format(const char *name, const char *fmt, ...)
-{
-  char buf[LARGE_SIZE];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(buf, LARGE_SIZE, fmt, ap);
-  va_end(ap);
-
-  std::string e(name);
-  print_spaces();
-  m_ss << "<" << e << ">" << escape_xml_str(buf) << "</" << e << ">";
-  if (m_pretty)
-    m_ss << "\n";
 }
 
 void XMLFormatter::dump_format_ns(const char* name, const char *ns, const char *fmt, ...)
