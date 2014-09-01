@@ -186,7 +186,6 @@ TEST(XmlFormatter, DumpFormatNameSpaceTest) {
   fmt.dump_format_ns("foo",
 		     "http://s3.amazonaws.com/doc/2006-03-01/",
 		     "%s","bar");
-  fmt.close_section();
   fmt.flush(oss1);
   ASSERT_EQ(oss1.str(),
 	    "<foo xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">bar</foo>");
