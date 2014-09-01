@@ -150,7 +150,7 @@ void RGWFormatter_Plain::dump_format(const char *name, const char *fmt, ...)
   write_data(format, buf);
 }
 
-void RGWFormatter_Plain::dump_format_ns(const char *name, const char *fmt, char *ns, ...)
+void RGWFormatter_Plain::dump_format_ns(const char *name, const char *fmt, const char *ns, ...)
 {
   // ignore the namespace for now
   char buf[LARGE_SIZE];
