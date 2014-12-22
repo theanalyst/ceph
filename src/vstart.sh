@@ -344,6 +344,12 @@ if [ "$start_mon" -eq 1 ]; then
         osd pool default erasure code directory = .libs
         osd pool default erasure code profile = plugin=jerasure technique=reed_sol_van k=2 m=1 ruleset-failure-domain=osd
         rgw frontends = fastcgi, civetweb port=$CEPH_RGW_PORT
+	rgw keystone url = http://127.0.0.1:35357
+	rgw keystone admin token = nova
+	rgw keystone accepted roles = admin, Member, _member_
+	rgw keystone token cache size = 100
+	rgw keystone revocation interval = 600
+	rgw s3 auth use keystone = true
         filestore fd cache size = 32
         run dir = $CEPH_OUT_DIR
 EOF
