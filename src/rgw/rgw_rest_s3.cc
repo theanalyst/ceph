@@ -986,18 +986,9 @@ int RGWPostObj_ObjStore_S3::get_policy()
 	dout(20) << "s3 keystone: trying keystone auth" << dendl;
 
 	RGW_Auth_S3_Keystone_ValidateToken keystone_validator(store->ctx());
-  string s3_secret_key = received_signature_str ; 
-
-    char expected_signature_char[CEPH_CRYPTO_HMACSHA1_DIGESTSIZE];
-
-    calc_hmac_sha1(s3_secret_key.c_str(), s3_secret_key.size(), encoded_policy.c_str(), encoded_policy.length(), expected_signature_char);
-	  bufferlist expected_signature_hmac_raw;
-    bufferlist expected_signature_hmac_encoded;
-    expected_signature_hmac_raw.append(expected_signature_char, CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
-    expected_signature_hmac_raw.encode_base64(expected_signature_hmac_encoded);
-    expected_signature_hmac_encoded.append((char)0); /* null terminate */
-	  
-	keystone_result = keystone_validator.validate_s3token(s3_access_key, expected_signature_hmac_encoded.c_str(), received_signature_str );
+	string keystone_policy=string(encoded_policy.c_str(),encoded_policy.length());
+        dout(20) << "s3 token recvd" << keystone_policy << dendl;
+	keystone_result = keystone_validator.validate_s3token(s3_access_key,keystone_policy, received_signature_str );
         dout(20) << "Authenticated with keystone " << keystone_result << dendl;
 	  s->user.user_id = keystone_validator.response.token.tenant.id;
 	  s->user.display_name = keystone_validator.response.token.tenant.name; 
@@ -1009,7 +1000,7 @@ int RGWPostObj_ObjStore_S3::get_policy()
 	      dout(10) << "NOTICE: failed to store new user's info: ret=" << ret << dendl;
 	  }}
 
-      if (ret < 0) {
+      if (keystone_result < 0) {
       ldout(s->cct, 0) << "User lookup failed!" << dendl;
       err_msg = "Bad access key / signature";
       return -EACCES;}
