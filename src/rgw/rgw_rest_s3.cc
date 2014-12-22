@@ -992,9 +992,10 @@ int RGWPostObj_ObjStore_S3::get_policy()
         dout(20) << "Authenticated with keystone " << keystone_result << dendl;
 	  s->user.user_id = keystone_validator.response.token.tenant.id;
 	  s->user.display_name = keystone_validator.response.token.tenant.name; 
-  
+ 	dout(20) << "Tenant ID" << s->user.user_id <<dendl;
+        dout(20) << "KEY T ID" << keystone_validator.response.token.tenant.id << dendl; 
 
-	  if (rgw_get_user_info_by_uid(store, keystone_validator.response.token.tenant.id, s->user) < 0) {
+	  if (rgw_get_user_info_by_uid(store, keystone_validator.response.token.tenant.id, user_info) < 0) {
 	    int ret = rgw_store_user_info(store, s->user, NULL, NULL, 0, true);
 	    if (ret < 0)
 	      dout(10) << "NOTICE: failed to store new user's info: ret=" << ret << dendl;
@@ -1004,8 +1005,9 @@ int RGWPostObj_ObjStore_S3::get_policy()
       ldout(s->cct, 0) << "User lookup failed!" << dendl;
       err_msg = "Bad access key / signature";
       return -EACCES;}
+	s->perm_mask=RGW_PERM_FULL_CONTROL;
     }
-
+    else {
     map<string, RGWAccessKey> access_keys  = user_info.access_keys;
 
     map<string, RGWAccessKey>::const_iterator iter = access_keys.find(s3_access_key);
@@ -1035,6 +1037,8 @@ int RGWPostObj_ObjStore_S3::get_policy()
       return -EACCES;
     }
     ldout(s->cct, 0) << "Successful Signature Verification!" << dendl;
+    }
+    
     bufferlist decoded_policy;
     try {
       decoded_policy.decode_base64(encoded_policy);
@@ -1069,7 +1073,8 @@ int RGWPostObj_ObjStore_S3::get_policy()
       ldout(s->cct, 0) << "policy check failed" << dendl;
       return r;
     }
-
+    dout(20)<<"user id" << user_info.user_id <<dendl;
+    
     s->user = user_info;
     s->owner.set_id(user_info.user_id);
     s->owner.set_name(user_info.display_name);
