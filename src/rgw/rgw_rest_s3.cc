@@ -990,7 +990,7 @@ int RGWPostObj_ObjStore_S3::get_policy()
 	dout(20) << "s3 keystone: trying keystone auth" << dendl;
 
 	RGW_Auth_S3_Keystone_ValidateToken keystone_validator(store->ctx());
-	keystone_result = keystone_validator.validate_s3token(s3_access_key,string(encoded_policy.c_str(),encoded_policy.length()),received_signature_str)
+	keystone_result = keystone_validator.validate_s3token(s3_access_key,string(encoded_policy.c_str(),encoded_policy.length()),received_signature_str);
 	  if (keystone_result == 0){
 	    user_info.user_id = keystone_validator.response.token.tenant.id;
 	    user_info.display_name = keystone_validator.response.token.tenant.name;
@@ -1005,9 +1005,11 @@ int RGWPostObj_ObjStore_S3::get_policy()
 	  }
       }
       // Keystone & cephx has failed
-      ldout(s->cct, 0) << "User lookup failed!" << dendl;
-      err_msg = "Bad access key / signature";
-      return -EACCES;
+      if (keystone_result != 0){
+     	 ldout(s->cct, 0) << "User lookup failed!" << dendl;
+     	 err_msg = "Bad access key / signature";
+      	 return -EACCES;
+	}
     }
     else{
       // Do signature verification for cephx .. keystone users are already verified
