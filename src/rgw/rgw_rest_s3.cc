@@ -991,28 +991,27 @@ int RGWPostObj_ObjStore_S3::get_policy()
 
 	RGW_Auth_S3_Keystone_ValidateToken keystone_validator(store->ctx());
 	keystone_result = keystone_validator.validate_s3token(s3_access_key,string(encoded_policy.c_str(),encoded_policy.length()),received_signature_str);
-	  if (keystone_result == 0){
-	    user_info.user_id = keystone_validator.response.token.tenant.id;
-	    user_info.display_name = keystone_validator.response.token.tenant.name;
 
-	    /* try to store user if it not already exists */
-	    if (rgw_get_user_info_by_uid(store, keystone_validator.response.token.tenant.id, user_info) < 0) {
-	      int ret = rgw_store_user_info(store, user_info, NULL, NULL, 0, true);
-	      if (ret < 0)
-		dout(10) << "NOTICE: failed to store new user's info: ret=" << ret << dendl;
-	    }
-	    s->perm_mask = RGW_PERM_FULL_CONTROL; //Check if really necessary
-	  }
-      }
-      // Keystone & cephx has failed
-      if (keystone_result != 0){
-	 ldout(s->cct, 0) << "User lookup failed!" << dendl;
-	 err_msg = "Bad access key / signature";
-	 return -EACCES;
+	if (keystone_result < 0) {
+	  ldout(s->cct, 0) << "User lookup failed!" << dendl;
+	  err_msg = "Bad access key / signature";
+	  return -EACCES;
 	}
-    }
-    else{
-      // Do signature verification for cephx .. keystone users are already verified
+
+	user_info.user_id = keystone_validator.response.token.tenant.id;
+	user_info.display_name = keystone_validator.response.token.tenant.name;
+
+	/* try to store user if it not already exists */
+	if (rgw_get_user_info_by_uid(store, keystone_validator.response.token.tenant.id, user_info) < 0) {
+	  int ret = rgw_store_user_info(store, user_info, NULL, NULL, 0, true);
+	  if (ret < 0) {
+	    dout(10) << "NOTICE: failed to store new user's info: ret=" << ret << dendl;
+	  }
+
+	  s->perm_mask = RGW_PERM_FULL_CONTROL;
+	}
+      }
+    } else {
       map<string, RGWAccessKey> access_keys  = user_info.access_keys;
 
       map<string, RGWAccessKey>::const_iterator iter = access_keys.find(s3_access_key);
