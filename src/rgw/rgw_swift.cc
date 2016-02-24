@@ -112,14 +112,10 @@ class RGWPostHTTPData : public RGWHTTPClient {
   std::string post_data;
   size_t post_data_index;
   std::string subject_token;
-  bool insecure;
 public:
   RGWPostHTTPData(CephContext *_cct, bufferlist *_bl) : RGWHTTPClient(_cct), bl(_bl), post_data_index(0) {}
-  RGWPostHTTPData(CephContext *_cct, bufferlist *_bl, bool verify_ssl) : RGWHTTPClient(_cct), bl(_bl), post_data_index(0) {
-
-    if (!verify_ssl) {
-      set_insecure();
-    }
+  RGWPostHTTPData(CephContext *_cct, bufferlist *_bl, bool verify_ssl) : RGWHTTPClient(_cct), bl(_bl), post_data_index(0){
+    set_verify_ssl(verify_ssl);
   }
 
   void set_post_data(const std::string& _post_data) {

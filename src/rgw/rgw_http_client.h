@@ -26,15 +26,15 @@ class RGWHTTPClient
 
   string last_method;
   string last_url;
+  bool verify_ssl; // Do not validate self signed certificates, default to false
 
 protected:
   CephContext *cct;
-  bool insecure; // Do not validate self signed certificates, default to false
 
   list<pair<string, string> > headers;
   int init_request(const char *method, const char *url, rgw_http_req_data *req_data);
 public:
-  explicit RGWHTTPClient(CephContext *_cct): send_len (0), has_send_len(false), req_data(NULL), user_info(NULL), insecure(false), cct(_cct) {}
+  explicit RGWHTTPClient(CephContext *_cct): send_len (0), has_send_len(false), req_data(NULL), user_info(NULL), verify_ssl(true), cct(_cct) {}
   virtual ~RGWHTTPClient();
 
   void set_user_info(void *info) {
@@ -58,8 +58,8 @@ public:
     has_send_len = true;
   }
 
-  void set_insecure() {
-    insecure = true;
+  void set_verify_ssl(bool flag) {
+    verify_ssl = flag;
   }
 
   int process(const char *method, const char *url);
