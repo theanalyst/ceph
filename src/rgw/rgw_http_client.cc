@@ -113,7 +113,7 @@ int RGWHTTPClient::process(const char *method, const char *url)
   if (has_send_len) {
     curl_easy_setopt(curl_handle, CURLOPT_INFILESIZE, (void *)send_len); 
   }
-  if (insecure) {
+  if (!verify_ssl) {
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
     dout(20) << "ssl verification is set to off" << dendl;

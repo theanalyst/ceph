@@ -2774,9 +2774,7 @@ int RGW_Auth_S3_Keystone_ValidateToken::validate_s3token(
   append_header("Content-Type", "application/json");
 
   /* check if we want to verify keystone's ssl certs */
-  if (!cct->_conf->rgw_keystone_verify_ssl){
-    set_insecure();
-  }
+  set_verify_ssl(cct->_conf->rgw_keystone_verify_ssl);
 
   /* encode token */
   bufferlist token_buff;
