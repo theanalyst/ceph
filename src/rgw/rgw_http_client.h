@@ -30,6 +30,7 @@ class RGWHTTPClient
 
 protected:
   CephContext *cct;
+  bool insecure; // Do not validate self signed certificates, default to false
 
   list<pair<string, string> > headers;
   int init_request(const char *method, const char *url, rgw_http_req_data *req_data);
@@ -44,6 +45,7 @@ public:
       http_status(HTTP_STATUS_NOSTATUS),
       req_data(nullptr),
       user_info(nullptr),
+      insecure(false)
       cct(_cct) {
   }
 
@@ -70,6 +72,10 @@ public:
 
   long get_http_status() const {
     return http_status;
+  }
+
+  void set_insecure() {
+    insecure = true;
   }
 
   int process(const char *method, const char *url);
