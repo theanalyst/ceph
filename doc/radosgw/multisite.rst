@@ -494,4 +494,12 @@ Starting the Ceph Object Gateway
 --------------------------------
 
 This is similar to starting the object gateway in the first zone, only
-difference being in the ``rgw zone`` configurable.
+difference being in the ``rgw zone`` configurable, which should reflect ``us-west``::
+
+  [client.rgw.us-east-1]
+  rgw_frontends="civetweb port=80"
+  rgw_zone=us-east
+
+And start the radosgw depending on your Operating system's init system, for eg::
+
+  $ sudo systemctl start ceph-radosgw.service
