@@ -333,17 +333,29 @@ And start the Ceph Object gateway (according to the OS installation) ::
 Configuring the Secondary zone
 ==============================
 
-The following steps will be performed on the node hosting the secondary zone.
-You would've to delete the default zonegroup as mentioned for the primary zone.
+The following steps will configure a secondary zone, you can either configure a
+secondary zone from the first node itself and pull the configuration (realm and
+period) in the end for the node hosting the secondary zone. Alternatively you
+can configure the secondary zone from the node hosting the secondary zone
+itself, here however you'll begin by pulling the configuration (realm and period
+pull).
 
-Realm configuration
--------------------
+
+Realm and Period update
+-----------------------
+
+.. important:: If you're configuring the secondary zone from the node hosting
+   the zone, this is the first step to be performed. If you're configuring the
+   secondary zone from the node hosting the primary zone itself, then this is
+   the step to be performed before starting the radosgw.
+
 
 Since a realm was already configured from the first gateway, we pull and make
-that realm the default here::
+that realm the default here, We also get the configuration from the master zone
+by pulling the period::
 
   # radosgw-admin realm pull --url=http://rgw1:80
-  --access-key=$SYSTEM_ACCESS_KEY --secret-key=$SYSTEM_SECRET_KEY
+  --access-key=$SYSTEM_ACCESS_KEY --secret=$SYSTEM_SECRET_KEY
   {
     "id": "4a367026-bd8f-40ee-b486-8212482ddcd7",
     "name": "gold",
@@ -351,16 +363,17 @@ that realm the default here::
     "epoch": 2
   }
 
+  # radosgw-admin period pull --url=http://rgw1:80 --acess-key=$SYSTEM_ACCESS_KEY --secret=$SYSTEM_SECRET_KEY
   # radosgw-admin realm default --rgw-realm=gold
+
+We also set the default zonegroup to the created ``us`` zonegroup::
+
+  # radosgw-admin zonegroup default --rgw-zonegroup=us
 
 Secondary Zone Configuration
 ----------------------------
 
-We first set the default zonegroup to the created ``us`` zonegroup::
-
-  # radosgw-admin zonegroup default --rgw-zonegroup=us
-
-Next we create the new zone, ``us-west``, with the same system keys::
+We create the new zone, ``us-west``, with the same system keys::
 
   # radosgw-admin zone create --rgw-zonegroup=us --rgw-zone=us-west
   --access-key=$ZONE_ACCESS_KEY --secret=$ZONE_SECRET_KEY --endpoints=http://rgw2:80
