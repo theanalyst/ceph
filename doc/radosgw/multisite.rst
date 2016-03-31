@@ -23,14 +23,18 @@ non-master zones. Following are the basic terminologies that would be used:
 
 - **Realm**: A realm is a container for zonegroups, this allows for separation
   of zonegroups themselves between clusters. It is possible to create multiple
-  realm, making it easier to run completely different configurations in the same
+  realms, making it easier to run completely different configurations in the same
   cluster.
 
 - **Period**: A period holds the configuration structure for the current state
-  of the realm, a period needs to be updated whenever there is a zone
-  configuration change of the master zone.
-
-
+  of the realm. Every period contains a unique id and an epoch. Every realm has
+  an associated current period, holding the current state of configuration of
+  the zonegroups and storage policies. Any configuration change for a non master
+  zone will increment the period's epoch. Changing the master zone to a
+  different zone will trigger the following changes:
+  - A new period is generated with a new period id and epoch of 1
+  - Realm's current period is updated to point to the newly generated period id
+  - Realm's epoch is incremented
 
 Pool Configuration
 ==================
@@ -92,7 +96,8 @@ Configure a realm called ``gold``, which for ::
 Note that every realm has an id, which allows for flexibility like renaming the
 realm later, should the need arise. The ``current_period`` changes whenever we
 change anything in the master zone. The ``epoch`` is incremented when there's a
-change in configuration which doesn't modify the master zone
+change in configuration of the master zone, which results in a change of current
+period.
 
 Deleting the default zonegroup
 ------------------------------
