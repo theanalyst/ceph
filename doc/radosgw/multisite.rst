@@ -82,9 +82,9 @@ This will be a part of a larger realm, say ``gold``
 Creating a realm
 ----------------
 
-Configure a realm called ``gold``, which for ::
+Configure a realm called ``gold``, and also make this the default ::
 
-  # radosgw-admin realm create --rgw-realm=gold
+  # radosgw-admin realm create --rgw-realm=gold --default
   {
     "id": "4a367026-bd8f-40ee-b486-8212482ddcd7",
     "name": "gold",
@@ -115,11 +115,12 @@ Creating a master zonegroup
 We'll be creating a zonegroup called ``us`` as a master zonegroup. A master
 zonegroup will be in control of the zonegroup map and propagate changes to the
 rest of the system. We will also set this zonegroup as the default, which allows
-explicitly mentioning the ``rgw-zonegroup`` switch for later commands.
+explicitly mentioning the ``rgw-zonegroup`` switch for later commands. We also
+make this the default zonegroup
 
 ::
 
-   # radosgw-admin zonegroup create --rgw-zonegroup=us --endpoints=http://rgw1:80 --master
+   # radosgw-admin zonegroup create --rgw-zonegroup=us --endpoints=http://rgw1:80 --master --default
    {
     "id": "d4018b8d-8c0d-4072-8919-608726fa369e",
     "name": "us",
@@ -137,15 +138,17 @@ explicitly mentioning the ``rgw-zonegroup`` switch for later commands.
     "realm_id": "4a367026-bd8f-40ee-b486-8212482ddcd7"
     }
 
-Now we make this as the default zonegroup via the following command ::
+Alternatively, a zonegroup can be also made default via the following command::
 
   # radosgw-admin zonegroup default --rgw-zonegroup=us
 
 
 Creating a master zone
 ----------------------
+
 Next we create a zone, and make it as the default zone. Note that for metadata
-operations like user creation you would want to use this zone.
+operations like user creation you would want to use this zone. We also add it to
+the zonegroup
 
 ::
 
@@ -182,10 +185,12 @@ operations like user creation you would want to use this zone.
     "realm_id": "4a367026-bd8f-40ee-b486-8212482ddcd7"
     }
 
-   # radosgw-admin zone default --rgw-zone=us-east
 
-Next we add the zone to the zonegroup::
+  Note that the above ``--rgw-zonegroup`` and ``--default`` switches add the
+  zone to a zonegroup and makes it the default zone as well. This can also be
+  accomplished alternatively by the following commands::
 
+  # radosgw-admin zone default --rgw-zone=us-east
   # radosgw-admin zonegroup add --rgw-zonegroup=us --rgw-zone=us-east
 
 
