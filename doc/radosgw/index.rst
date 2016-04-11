@@ -39,7 +39,8 @@ you may write data with one API and retrieve it with the other.
 	Manual Install <../../install/install-ceph-gateway>
 	Simple Configuration <config>
 	Federated Configuration <federated-config>
-	Config Reference <config-ref>
+  Multisite Configuration <multisite>
+  Config Reference <config-ref>
 	Admin Guide <admin>
 	Purging Temp Data <purge-temp>
 	S3 API <s3>
