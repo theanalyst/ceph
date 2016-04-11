@@ -248,10 +248,9 @@ Update the period
 -----------------
 Since we have now made a change in the master zone configuration, we need to
 commit these zone changes to reflect in the realm configuration structure. This
-is what the period would look like initially.
+is what the period would look like initially::
 
-::
-   # radosgw-admin period get
+  # radosgw-admin period get
    {
     "id": "09559832-67a4-4101-8b3f-10dfcd6b2707",
     "epoch": 1,
@@ -527,8 +526,6 @@ Configuring the Gateway in the second Ceph Cluster
 
 Now we go on to configuring radosgw in the second ceph cluster, which may be
 geographically apart, that is a part of the same zonegroup.
->>>>>>> 9d7288b... doc: rgw-admin add the doc for creating a second zone in same cluster
-
 
 Since a realm was already configured from the first gateway, we pull and make
 that realm the default here, We also get the configuration from the master zone
