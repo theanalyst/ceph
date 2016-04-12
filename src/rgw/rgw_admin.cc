@@ -1481,7 +1481,8 @@ static int update_period(const string& realm_id, const string& realm_name,
   period.fork();
   ret = period.update();
   if(ret < 0) {
-    cerr << "failed to update period: " << cpp_strerror(-ret) << std::endl;
+    if (ret != -ENOENT)
+      cerr << "failed to update period: " << cpp_strerror(-ret) << std::endl;
     return ret;
   }
   ret = period.store_info(false);
@@ -2530,9 +2531,8 @@ int main(int argc, char **argv)
         int ret = update_period(realm_id, realm_name, period_id, period_epoch,
                                 commit, remote, url, access_key, secret_key,
                                 formatter);
-	if (ret < 0) {
-          cerr << "period update failed: " << cpp_strerror(-ret) << std::endl;
-	  return ret;
+	if (ret < 0){
+	  return -ret;
 	}
       }
       break;
@@ -3769,7 +3769,7 @@ int main(int argc, char **argv)
                               commit, remote, url, access_key, secret_key,
                               formatter);
       if (ret < 0) {
-        cerr << "period update failed: " << cpp_strerror(-ret) << std::endl;
+	// no need for printing an error message as  update_period already handles it
         return ret;
       }
     }

@@ -1186,7 +1186,10 @@ int RGWPeriod::update()
 
     int ret = period_map.update(zg);
     if (ret < 0) {
-      ldout(cct, 0) << "ERROR: updating period map: " << cpp_strerror(-ret) << dendl;
+      // We'll catch -EINVAL, as it indicates multiple master zonegroups, TODO catch anything else?
+      if (ret == -EINVAL){
+        ldout(cct,0) << "ERROR: updating periodmap, multiple master zonegroups in same realm" <<dendl;
+      }
       return ret;
     }
   }
