@@ -151,6 +151,7 @@ void _usage()
   cout << "  replicalog update          update replica metadata log entry\n";
   cout << "  replicalog delete          delete replica metadata log entry\n";
   cout << "  orphans find               init and run search for leaked rados objects\n";
+  cout << "  orphans list-jobs          list the currently active jobs\n"
   cout << "  orphans finish             clean up search for leaked rados objects\n";
   cout << "options:\n";
   cout << "   --tenant=<tenant>         tenant name\n";
@@ -294,6 +295,7 @@ enum {
   OPT_GC_LIST,
   OPT_GC_PROCESS,
   OPT_ORPHANS_FIND,
+  OPT_ORPHANS_LIST_JOBS,
   OPT_ORPHANS_FINISH,
   OPT_ZONEGROUP_ADD,
   OPT_ZONEGROUP_CREATE,
@@ -640,6 +642,8 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
   } else if (strcmp(prev_cmd, "orphans") == 0) {
     if (strcmp(cmd, "find") == 0)
       return OPT_ORPHANS_FIND;
+    if (strcmp(cmd, "list-jobs") == 0)
+      return OPT_ORPHANS_LIST_JOBS;
     if (strcmp(cmd, "finish") == 0)
       return OPT_ORPHANS_FINISH;
   } else if (strcmp(prev_cmd, "metadata") == 0) {
@@ -4600,6 +4604,10 @@ next:
     if (ret < 0) {
       return -ret;
     }
+  }
+
+  if (opt_cmd == OPT_ORPHANS_LIST_JOBS) {
+
   }
 
   if (opt_cmd == OPT_ORPHANS_FINISH) {
