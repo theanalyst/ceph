@@ -1929,11 +1929,6 @@ void RGWCreateBucket::execute()
     JSONParser jp;
     op_ret = forward_request_to_master(s, NULL, store, in_data, &jp);
     if (op_ret < 0) {
-      if (op_ret == -EINVAL){
-	// Taking the easy way out, basically some issue in processing request from our side
-	// return a 5XX instead of an -EINVAL to the end user
-	op_ret = -ERR_SERVICE_UNAVAILABLE;
-      }
       return;
     }
 
