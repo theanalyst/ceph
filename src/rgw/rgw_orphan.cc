@@ -1,4 +1,4 @@
-
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
 
 #include <string>
 
@@ -106,6 +106,27 @@ int RGWOrphanStore::remove_job(const string& job_name)
     return r;
   }
 
+  return 0;
+}
+
+int RGWOrphanStore::list_jobs(map <string,RGWOrphanSearchState>& job_list)
+{
+  map <string,bufferlist> vals;
+  int r = ioctx.omap_get_vals(oid, "", 1024, &vals);
+  if (r < 0) {
+    return r;
+  }
+  for (const auto &it : vals){
+    RGWOrphanSearchState state;
+    try {
+      bufferlist bl = it.second;
+      ::decode(state, bl);
+    } catch (buffer::error& err) {
+      lderr(store->ctx()) << "ERROR: could not decode buffer" << dendl;
+      return -EIO;
+    }
+    job_list[it.first] = state;
+  }
   return 0;
 }
 
