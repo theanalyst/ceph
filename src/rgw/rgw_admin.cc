@@ -300,6 +300,7 @@ enum {
   OPT_GC_PROCESS,
   OPT_ORPHANS_FIND,
   OPT_ORPHANS_FINISH,
+  OPT_ORPHANS_LIST_JOBS,
   OPT_ZONEGROUP_ADD,
   OPT_ZONEGROUP_CREATE,
   OPT_ZONEGROUP_DEFAULT,
@@ -648,6 +649,8 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
       return OPT_ORPHANS_FIND;
     if (strcmp(cmd, "finish") == 0)
       return OPT_ORPHANS_FINISH;
+    if (strcmp(cmd, "list-jobs") == 0)
+      return OPT_ORPHANS_LIST_JOBS;
   } else if (strcmp(prev_cmd, "metadata") == 0) {
     if (strcmp(cmd, "get") == 0)
       return OPT_METADATA_GET;
@@ -4661,6 +4664,18 @@ next:
     ret = search.finish();
     if (ret < 0) {
       return -ret;
+    }
+  }
+
+  if (opt_cmd == OPT_ORPHANS_LIST_JOBS){
+    RGWOrphanStore orphan_store(store);
+    map <string,RGWOrphanSearchState> m;
+    int r = orphan_store.list_jobs(m);
+    if (r < 0) {
+      cerr << "job list failed" << std::endl;
+    }
+    for (auto it: m){
+      cout << it.first << std::endl;
     }
   }
 
