@@ -405,6 +405,38 @@ int cls_cxx_snap_revert(cls_method_context_t hctx, snapid_t snapid)
   return (*pctx)->pg->do_osd_ops(*pctx, ops);
 }
 
+int cls_cxx_map_get_size(cls_method_context_t hctx, uint32_t& size)
+{
+  ReplicatedPG::OpContext **pctx = (ReplicatedPG::OpContext **)hctx;
+  vector<OSDOp> ops(1);
+  OSDOp& op = ops[0];
+  int ret;
+
+  string start_after;
+  string filter_prefix;
+  uint64_t max = (uint64_t)-1;
+  bufferlist inbl;
+
+  ::encode(start_after, op.indata);
+  ::encode(max, op.indata);
+  ::encode(filter_prefix, op.indata);
+
+  op.op.op = CEPH_OSD_OP_OMAPGETVALS;
+
+  ret = (*pctx)->pg->do_osd_ops(*pctx, ops);
+  if (ret < 0)
+    return ret;
+
+  bufferlist::iterator iter = op.outdata.begin();
+  try {
+    ::decode(size, iter);
+  } catch (buffer::error &err){
+    return -EIO;
+  }
+
+  return size;
+}
+
 int cls_cxx_map_get_all_vals(cls_method_context_t hctx, map<string, bufferlist>* vals)
 {
   ReplicatedPG::OpContext **pctx = (ReplicatedPG::OpContext **)hctx;
