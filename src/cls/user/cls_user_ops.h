@@ -58,6 +58,29 @@ struct cls_user_remove_bucket_op {
 };
 WRITE_CLASS_ENCODER(cls_user_remove_bucket_op)
 
+struct cls_user_count_buckets_op {
+  uint32_t bucket_count;
+
+  cls_user_count_buckets_op() {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(bucket_count, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(bucket_count, bl);
+    DECODE_FINISH(bl);
+  }
+
+  void dump(Formatter *f) const;
+  static void generate_test_instances(list<cls_user_remove_bucket_op*>& ls);
+};
+WRITE_CLASS_ENCODER(cls_user_count_buckets_op)
+
+
 struct cls_user_list_buckets_op {
   string marker;
   string end_marker;

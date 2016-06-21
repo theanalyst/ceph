@@ -41,6 +41,15 @@ void cls_user_remove_bucket(librados::ObjectWriteOperation& op, const cls_user_b
   op.exec("user", "remove_bucket", in);
 }
 
+void cls_user_count_buckets(librados::ObjectWriteOperation& op, uint32_t& bucket_count)
+{
+  bufferlist in;
+  cls_user_count_buckets_op call;
+  call.bucket_count = bucket_count;
+  ::encode(call, in);
+  op.exec("user", "count_buckets", in);
+}
+
 class ClsUserListCtx : public ObjectOperationCompletion {
   list<cls_user_bucket_entry> *entries;
   string *marker;

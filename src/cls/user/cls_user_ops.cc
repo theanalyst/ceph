@@ -40,6 +40,10 @@ void cls_user_remove_bucket_op::generate_test_instances(list<cls_user_remove_buc
   ls.push_back(op);
 }
 
+void cls_user_count_buckets_op::dump(Formatter *f) const {
+  encode_json("bucket_count", bucket_count, f);
+}
+
 void cls_user_list_buckets_op::dump(Formatter *f) const
 {
   encode_json("marker", marker, f);

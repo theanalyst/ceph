@@ -23,6 +23,7 @@ cls_method_handle_t h_user_complete_stats_sync;
 cls_method_handle_t h_user_remove_bucket;
 cls_method_handle_t h_user_list_buckets;
 cls_method_handle_t h_user_get_header;
+cls_method_handle_t h_user_count_buckets;
 
 static int write_entry(cls_method_context_t hctx, const string& key, const cls_user_bucket_entry& entry)
 {
@@ -275,6 +276,28 @@ static int cls_user_remove_bucket(cls_method_context_t hctx, bufferlist *in, buf
   return 0;
 }
 
+static int cls_user_count_buckets(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+{
+  bufferlist::iterator in_iter = in->begin();
+
+  uint32_t bucket_count;
+  int rc = cls_cxx_map_get_size(hctx,bucket_count);
+  if (rc < 0)
+    return rc;
+
+  // bump my priority
+  CLS_LOG(1,"cls_user_count_bucket returned", bucket_count);
+
+  try {
+    ::encode(bucket_count, *out);
+  } catch (buffer::error &err) {
+    CLS_LOG(0, "ERROR: cls_user_count_buckets failed encode");
+  }
+
+  return 0;
+}
+
+
 static int cls_user_list_buckets(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
   bufferlist::iterator in_iter = in->begin();
@@ -384,7 +407,7 @@ void __cls_init()
   cls_register_cxx_method(h_class, "remove_bucket", CLS_METHOD_RD | CLS_METHOD_WR, cls_user_remove_bucket, &h_user_remove_bucket);
   cls_register_cxx_method(h_class, "list_buckets", CLS_METHOD_RD, cls_user_list_buckets, &h_user_list_buckets);
   cls_register_cxx_method(h_class, "get_header", CLS_METHOD_RD, cls_user_get_header, &h_user_get_header);
-
+  cls_register_cxx_method(h_class, "count_buckets", CLS_METHOD_RD, cls_user_count_buckets, &h_user_count_buckets);
   return;
 }
 
