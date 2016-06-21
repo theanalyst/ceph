@@ -161,7 +161,7 @@ extern int cls_cxx_setxattr(cls_method_context_t hctx, const char *name,
 extern int cls_cxx_replace(cls_method_context_t hctx, int ofs, int len, bufferlist *bl);
 extern int cls_cxx_snap_revert(cls_method_context_t hctx, snapid_t snapid);
 extern int cls_cxx_map_clear(cls_method_context_t hctx);
-extern int cls_cxx_get_size(cls_method_context_t hctx,
+extern int cls_cxx_map_get_size(cls_method_context_t hctx,
 			    uint32_t size);
 extern int cls_cxx_map_get_all_vals(cls_method_context_t hctx,
                                     std::map<string, bufferlist> *vals);
