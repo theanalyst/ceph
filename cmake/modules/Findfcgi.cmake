@@ -2,9 +2,9 @@
 #
 # If it's found it sets FCGI_FOUND to TRUE
 # and following variables are set:
-# FCGI_INCLUDE_DIR
+# FASTCGI_INCLUDE_DIR
 # FCGI_LIBRARY
-FIND_PATH(FCGI_INCLUDE_DIR
+FIND_PATH(FASTCGI_INCLUDE_DIR
   fcgio.h
   PATHS
   /usr/include
@@ -20,9 +20,9 @@ FIND_LIBRARY(FCGI_LIBRARY NAMES fcgi libfcgi PATHS
   "$ENV{LIB}"
   )
 
-IF (FCGI_INCLUDE_DIR AND FCGI_LIBRARY)
+IF (FASTCGI_INCLUDE_DIR AND FCGI_LIBRARY)
    SET(FCGI_FOUND TRUE)
-ENDIF (FCGI_INCLUDE_DIR AND FCGI_LIBRARY)
+ENDIF (FASTCGI_INCLUDE_DIR AND FCGI_LIBRARY)
 
 IF (FCGI_FOUND)
    IF (NOT FCGI_FIND_QUIETLY)
@@ -37,6 +37,6 @@ ENDIF (FCGI_FOUND)
 # handle the QUIETLY and REQUIRED arguments and set UUID_FOUND to TRUE if
 # all listed variables are TRUE
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(fcgi DEFAULT_MSG FCGI_LIBRARY FCGI_INCLUDE_DIR)
+find_package_handle_standard_args(fcgi DEFAULT_MSG FCGI_LIBRARY FASTCGI_INCLUDE_DIR)
 
-mark_as_advanced(FCGI_LIBRARY FCGI_INCLUDE_DIR)
+mark_as_advanced(FCGI_LIBRARY FASTCGI_INCLUDE_DIR)
