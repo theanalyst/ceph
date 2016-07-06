@@ -61,6 +61,9 @@
 #include "include/types.h"
 #include "common/BackTrace.h"
 
+// for google perf
+#include <gperftools/profiler.h>
+
 #define dout_subsys ceph_subsys_rgw
 
 using namespace std;
@@ -123,6 +126,19 @@ static void handle_sigterm(int signum)
     dout(1) << __func__ << " set alarm for " << secs << dendl;
   }
 
+}
+
+static void handle_google_prof(int signum){
+  switch(signum){
+  case SIGUSR1:
+    dout(0) << "starting google prof" << dendl;
+    ProfilerStart("/tmp/rgw.prof");
+    break;
+  case SIGUSR2:
+    dout(0) << "stopping google perf" << dendl;
+    ProfilerStop();
+    break;
+  }
 }
 
 static void godown_alarm(int signum)
@@ -388,7 +404,11 @@ int main(int argc, const char **argv)
   register_async_signal_handler(SIGHUP, reloader_handler);
   register_async_signal_handler(SIGTERM, handle_sigterm);
   register_async_signal_handler(SIGINT, handle_sigterm);
-  register_async_signal_handler(SIGUSR1, handle_sigterm);
+
+  //register_async_signal_handler(SIGUSR1, handle_sigterm);
+  // use sigusr1 and 2 to start/stop profiler
+  register_async_signal_handler(SIGUSR1, handle_google_prof);
+  register_async_signal_handler(SIGUSR2, handle_google_prof);
   sighandler_alrm = signal(SIGALRM, godown_alarm);
 
   list<RGWFrontend *> fes;
@@ -472,7 +492,8 @@ int main(int argc, const char **argv)
   unregister_async_signal_handler(SIGHUP, reloader_handler);
   unregister_async_signal_handler(SIGTERM, handle_sigterm);
   unregister_async_signal_handler(SIGINT, handle_sigterm);
-  unregister_async_signal_handler(SIGUSR1, handle_sigterm);
+  unregister_async_signal_handler(SIGUSR1, handle_google_prof);
+  unregister_async_signal_handler(SIGUSR2, handle_google_prof);
   shutdown_async_signal_handler();
 
   rgw_log_usage_finalize();
