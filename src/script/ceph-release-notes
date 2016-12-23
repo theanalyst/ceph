@@ -55,7 +55,7 @@ def get_original_issue(issue, verbose):
         if verbose:
             print ("http://tracker.ceph.com/issues/" + issue + " has no relations, do not look for the original issue")
         return issue
-    
+
     copied_to = [str(i['issue_id']) for i in r["issue"]["relations"] if i["relation_type"] == "copied_to"]
     if copied_to:
         if len(copied_to) > 1:
@@ -139,8 +139,8 @@ def make_release_notes(gh, repo, ref, plaintext, verbose, strict, use_tags):
 
             if strict and not issues:
                 print ("ERROR: http://github.com/ceph/ceph/pull/" + str(number) + " has no associated issue")
-                continue    
-            
+                continue
+
             if strict:
                 title_re = '^(?:hammer|infernalis|jewel|kraken):\s+(cli|common|mon|msgr|osd|log|librbd|rbd|fs|mds|objecter|rgw|build/ops|tests|tools|cmake|doc|crush|librados)(:.*)'
                 match = re.match(title_re, title)
@@ -157,7 +157,7 @@ def make_release_notes(gh, repo, ref, plaintext, verbose, strict, use_tags):
                 issue = get_original_issue(issue, verbose)
                 issue2prs.setdefault(issue, set([])).add(number)
                 pr2issues.setdefault(number, set([])).add(issue)
-            sys.stdout.write('.')
+            print(pr2info[number])
 
     print (" done collecting merges.")
 
