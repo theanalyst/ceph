@@ -2882,17 +2882,17 @@ void FileStore::_do_transaction(
 
 	if (r == -ENOENT && (op->op == Transaction::OP_CLONERANGE ||
 			     op->op == Transaction::OP_CLONE ||
-			     op->op == Transaction::OP_CLONERANGE2))
+			     op->op == Transaction::OP_CLONERANGE2)) {
 	  msg = "ENOENT on clone suggests osd bug";
-
-	if (r == -ENOSPC)
+	} else if (r == -ENOSPC) {
 	  // For now, if we hit _any_ ENOSPC, crash, before we do any damage
 	  // by partially applying transactions.
 	  msg = "ENOSPC handling not implemented";
-
-	if (r == -ENOTEMPTY) {
+	} else if (r == -ENOTEMPTY) {
 	  msg = "ENOTEMPTY suggests garbage data in osd data dir";
-	}
+	} else if (r == -EPERM) {
+          msg = "EPERM suggests file(s) in osd data dir not owned by ceph user, or leveldb corruption";
+        }
 
 	dout(0) << " error " << cpp_strerror(r) << " not handled on operation " << op
 		<< " (" << spos << ", or op " << spos.op << ", counting from 0)" << dendl;
@@ -3046,11 +3046,12 @@ int FileStore::read(
 int FileStore::_do_fiemap(int fd, uint64_t offset, size_t len,
                           map<uint64_t, uint64_t> *m)
 {
-  struct fiemap *fiemap = NULL;
   uint64_t i;
   struct fiemap_extent *extent = NULL;
+  struct fiemap *fiemap = NULL;
   int r = 0;
 
+more:
   r = backend->do_fiemap(fd, offset, len, &fiemap);
   if (r < 0)
     return r;
@@ -3070,6 +3071,7 @@ int FileStore::_do_fiemap(int fd, uint64_t offset, size_t len,
 
   i = 0;
 
+  struct fiemap_extent *last = nullptr;
   while (i < fiemap->fm_mapped_extents) {
     struct fiemap_extent *next = extent + 1;
 
@@ -3090,9 +3092,16 @@ int FileStore::_do_fiemap(int fd, uint64_t offset, size_t len,
       extent->fe_length = offset + len - extent->fe_logical;
     (*m)[extent->fe_logical] = extent->fe_length;
     i++;
-    extent++;
+    last = extent++;
   }
+  const bool is_last = last->fe_flags & FIEMAP_EXTENT_LAST;
   free(fiemap);
+  if (!is_last) {
+    uint64_t xoffset = last->fe_logical + last->fe_length - offset;
+    offset = last->fe_logical + last->fe_length;
+    len -= xoffset;
+    goto more;
+  }
 
   return r;
 }

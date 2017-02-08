@@ -1,4 +1,3 @@
-
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
@@ -388,8 +387,8 @@ int RGWSystemMetaObj::init(CephContext *_cct, RGWRados *_store, bool setup_obj, 
     } else if (!old_format) {
       r = read_id(name, id);
       if (r < 0) {
-	ldout(cct, 0) << "error in read_id for id " << id << " : " << cpp_strerror(-r) << dendl;
-	return r;
+        ldout(cct, 0) << "error in read_id for object name: " << name << " : " << cpp_strerror(-r) << dendl;
+        return r;
       }
     }
   }
@@ -902,7 +901,12 @@ int RGWPeriod::init(CephContext *_cct, RGWRados *_store, bool setup_obj)
 
 
 int RGWPeriod::get_zonegroup(RGWZoneGroup& zonegroup, const string& zonegroup_id) {
-  map<string, RGWZoneGroup>::const_iterator iter = period_map.zonegroups.find(zonegroup_id);
+  map<string, RGWZoneGroup>::const_iterator iter;
+  if (!zonegroup_id.empty()) {
+    iter = period_map.zonegroups.find(zonegroup_id);
+  } else {
+    iter = period_map.zonegroups.find("default");
+  }
   if (iter != period_map.zonegroups.end()) {
     zonegroup = iter->second;
     return 0;
@@ -3237,9 +3241,9 @@ int RGWRados::convert_regionmap()
 {
   RGWZoneGroupMap zonegroupmap;
 
-  string pool_name = cct->_conf->rgw_zone_root_pool;
+  string pool_name = cct->_conf->rgw_region_root_pool;
   if (pool_name.empty()) {
-    pool_name = RGW_DEFAULT_ZONE_ROOT_POOL;
+    pool_name = RGW_DEFAULT_ZONEGROUP_ROOT_POOL;
   }
   string oid = region_map_oid; 
 
@@ -3568,7 +3572,7 @@ int RGWRados::init_zg_from_period(bool *initialized)
     return 0;
   }
   if (ret < 0) {
-    ldout(cct, 0) << "failed reading zonegroup info: " << " " << cpp_strerror(-ret) << dendl;
+    ldout(cct, 0) << "failed reading zonegroup info: " << cpp_strerror(-ret) << dendl;
     return ret;
   }
   ldout(cct, 20) << "period zonegroup name " << zonegroup.get_name() << dendl;
@@ -3591,9 +3595,29 @@ int RGWRados::init_zg_from_period(bool *initialized)
     // use endpoints from the zonegroup's master zone
     auto master = zg.zones.find(zg.master_zone);
     if (master == zg.zones.end()) {
-      ldout(cct, 0) << "zonegroup " << zg.get_name() << " missing zone for "
-          "master_zone=" << zg.master_zone << dendl;
-      return -EINVAL;
+      // fix missing master zone for a single zone zonegroup
+      if (zg.master_zone.empty() && zg.zones.size() == 1) {
+	master = zg.zones.begin();
+	ldout(cct, 0) << "zonegroup " << zg.get_name() << " missing master_zone, setting zone " <<
+	  master->second.name << " id:" << master->second.id << " as master" << dendl;
+	if (zonegroup.get_id() == zg.get_id()) {
+	  zonegroup.master_zone = master->second.id;
+	  zonegroup.update();
+	} else {
+	  RGWZoneGroup fixed_zg(zg.get_id(),zg.get_name());
+	  ret = fixed_zg.init(cct, this);
+	  if (ret < 0) {
+	    ldout(cct, 0) << "error initializing zonegroup : " << cpp_strerror(-ret) << dendl;
+	    return ret;
+	  }
+	  fixed_zg.master_zone = master->second.id;
+	  fixed_zg.update();
+	}
+      } else {
+	ldout(cct, 0) << "zonegroup " << zg.get_name() << " missing zone for master_zone=" <<
+	  zg.master_zone << dendl;
+	return -EINVAL;
+      }
     }
     const auto& endpoints = master->second.endpoints;
     add_new_connection_to_map(zonegroup_conn_map, zg, new RGWRESTConn(cct, this, zg.get_id(), endpoints));
@@ -3635,9 +3659,18 @@ int RGWRados::init_zg_from_local(bool *creating_defaults)
     // use endpoints from the zonegroup's master zone
     auto master = zonegroup.zones.find(zonegroup.master_zone);
     if (master == zonegroup.zones.end()) {
-      ldout(cct, 0) << "zonegroup " << zonegroup.get_name() << " missing zone for "
+      // fix missing master zone for a single zone zonegroup
+      if (zonegroup.master_zone.empty() && zonegroup.zones.size() == 1) {
+	master = zonegroup.zones.begin();
+	ldout(cct, 0) << "zonegroup " << zonegroup.get_name() << " missing master_zone, setting zone " <<
+	  master->second.name << " id:" << master->second.id << " as master" << dendl;
+	zonegroup.master_zone = master->second.id;
+	zonegroup.update();
+      } else {
+	ldout(cct, 0) << "zonegroup " << zonegroup.get_name() << " missing zone for "
           "master_zone=" << zonegroup.master_zone << dendl;
-      return -EINVAL;
+	return -EINVAL;
+      }
     }
     const auto& endpoints = master->second.endpoints;
     rest_master_conn = new RGWRESTConn(cct, this, zonegroup.get_id(), endpoints);
@@ -3789,6 +3822,13 @@ int RGWRados::init_complete()
   if (use_gc_thread) {
     gc->start_processor();
     obj_expirer->start_processor();
+  }
+
+  if (run_sync_thread) {
+    // initialize the log period history. we want to do this any time we're not
+    // running under radosgw-admin, so we check run_sync_thread here before
+    // disabling it based on the zone/zonegroup setup
+    meta_mgr->init_oldest_log_period();
   }
 
   /* not point of running sync thread if there is a single zone or
@@ -5154,7 +5194,7 @@ int RGWRados::create_bucket(RGWUserInfo& owner, rgw_bucket& bucket,
     info.bucket_index_shard_hash_type = RGWBucketInfo::MOD;
     info.requester_pays = false;
     if (real_clock::is_zero(creation_time))
-      creation_time = ceph::real_clock::now(cct);
+      info.creation_time = ceph::real_clock::now(cct);
     else
       info.creation_time = creation_time;
     ret = put_linked_bucket_info(info, exclusive, ceph::real_time(), pep_objv, &attrs, true);
@@ -7442,6 +7482,10 @@ int RGWRados::Object::complete_atomic_modification()
   cls_rgw_obj_chain chain;
   store->update_gc_chain(obj, state->manifest, &chain);
 
+  if (chain.empty()) {
+    return 0;
+  }
+
   string tag = state->obj_tag.to_str();
   int ret = store->gc->send_chain(chain, tag, false);  // do it async
 
@@ -9057,13 +9101,7 @@ int RGWRados::get_system_obj(RGWObjectCtx& obj_ctx, RGWRados::SystemObject::Read
   uint64_t len;
   ObjectReadOperation op;
 
-  RGWObjState *astate = NULL;
-
   get_obj_bucket_and_oid_loc(obj, bucket, oid, key);
-
-  int r = get_system_obj_state(&obj_ctx, obj, &astate, NULL);
-  if (r < 0)
-    return r;
 
   if (end < 0)
     len = 0;
@@ -9082,7 +9120,7 @@ int RGWRados::get_system_obj(RGWObjectCtx& obj_ctx, RGWRados::SystemObject::Read
   }
 
   librados::IoCtx *io_ctx;
-  r = read_state.get_ioctx(this, obj, &io_ctx);
+  int r = read_state.get_ioctx(this, obj, &io_ctx);
   if (r < 0) {
     ldout(cct, 20) << "get_ioctx() on obj=" << obj << " returned " << r << dendl;
     return r;
@@ -9206,7 +9244,12 @@ struct get_obj_data : public RefCountedObject {
   void add_io(off_t ofs, off_t len, bufferlist **pbl, AioCompletion **pc) {
     Mutex::Locker l(lock);
 
-    get_obj_io& io = io_map[ofs];
+    const auto& io_iter = io_map.insert(
+      map<off_t, get_obj_io>::value_type(ofs, get_obj_io()));
+
+    assert(io_iter.second); // assert new insertion
+
+    get_obj_io& io = (io_iter.first)->second;
     *pbl = &io.bl;
 
     struct get_obj_aio_data aio;
@@ -9453,9 +9496,10 @@ int RGWRados::get_obj_iterate_cb(RGWObjectCtx *ctx, RGWObjState *astate,
   io_ctx.locator_set_key(key);
 
   r = io_ctx.aio_operate(oid, c, &op, NULL);
-  ldout(cct, 20) << "rados->aio_operate r=" << r << " bl.length=" << pbl->length() << dendl;
-  if (r < 0)
-    goto done_err;
+  if (r < 0) {
+	ldout(cct, 0) << "rados->aio_operate r=" << r << dendl;
+	goto done_err;
+  }
 
   // Flush data to client if there is any
   r = flush_read_list(d);
@@ -10847,11 +10891,33 @@ int RGWRados::omap_get_vals(rgw_obj& obj, bufferlist& header, const string& mark
  
 }
 
-int RGWRados::omap_get_all(rgw_obj& obj, bufferlist& header, std::map<string, bufferlist>& m)
+int RGWRados::omap_get_all(rgw_obj& obj, bufferlist& header,
+			   std::map<string, bufferlist>& m)
 {
+  rgw_rados_ref ref;
+  rgw_bucket bucket;
+  int r = get_obj_ref(obj, &ref, &bucket);
+  if (r < 0) {
+    return r;
+  }
+
+#define MAX_OMAP_GET_ENTRIES 1024
+  const int count = MAX_OMAP_GET_ENTRIES;
   string start_after;
 
-  return omap_get_vals(obj, header, start_after, (uint64_t)-1, m);
+  while (true) {
+    std::map<string, bufferlist> t;
+    r = ref.ioctx.omap_get_vals(ref.oid, start_after, count, &t);
+    if (r < 0) {
+      return r;
+    }
+    if (t.empty()) {
+      break;
+    }
+    start_after = t.rbegin()->first;
+    m.insert(t.begin(), t.end());
+  }
+  return 0;
 }
 
 int RGWRados::omap_set(rgw_obj& obj, std::string& key, bufferlist& bl)
@@ -12368,5 +12434,50 @@ librados::Rados* RGWRados::get_rados_handle()
       return &rados[handle];
     }
   }
+}
+
+int RGWRados::delete_obj_aio(rgw_obj& obj, rgw_bucket& bucket,
+                             RGWBucketInfo& bucket_info, RGWObjState *astate,
+                             list<librados::AioCompletion *>& handles, bool keep_index_consistent)
+{
+  rgw_rados_ref ref;
+  int ret = get_obj_ref(obj, &ref, &bucket);
+  if (ret < 0) {
+    lderr(cct) << "ERROR: failed to get obj ref with ret=" << ret << dendl;
+    return ret;
+  }
+
+  if (keep_index_consistent) {
+    RGWRados::Bucket bop(this, bucket_info);
+    RGWRados::Bucket::UpdateIndex index_op(&bop, obj, astate);
+
+    ret = index_op.prepare(CLS_RGW_OP_DEL);
+    if (ret < 0) {
+      lderr(cct) << "ERROR: failed to prepare index op with ret=" << ret << dendl;
+      return ret;
+    }
+  }
+
+  ObjectWriteOperation op;
+  list<string> prefixes;
+  cls_rgw_remove_obj(op, prefixes);
+
+  AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
+  ret = ref.ioctx.aio_operate(ref.oid, c, &op);
+  if (ret < 0) {
+    lderr(cct) << "ERROR: AioOperate failed with ret=" << ret << dendl;
+    return ret;
+  }
+
+  handles.push_back(c);
+
+  if (keep_index_consistent) {
+    ret = delete_obj_index(obj);
+    if (ret < 0) {
+      lderr(cct) << "ERROR: failed to delete obj index with ret=" << ret << dendl;
+      return ret;
+    }
+  }
+  return ret;
 }
 

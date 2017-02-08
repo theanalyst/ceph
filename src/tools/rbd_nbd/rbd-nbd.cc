@@ -219,7 +219,7 @@ private:
 
       int r = safe_read_exact(fd, &ctx->request, sizeof(struct nbd_request));
       if (r < 0) {
-	derr << "failed to read nbd request header: " << cpp_strerror(errno)
+	derr << "failed to read nbd request header: " << cpp_strerror(r)
 	     << dendl;
 	return;
       }
@@ -251,7 +251,7 @@ private:
 	  r = safe_read_exact(fd, ptr.c_str(), ctx->request.len);
           if (r < 0) {
 	    derr << *ctx << ": failed to read nbd request data: "
-		 << cpp_strerror(errno) << dendl;
+		 << cpp_strerror(r) << dendl;
             return;
 	  }
           ctx->data.push_back(ptr);
@@ -582,6 +582,14 @@ static int do_map()
   }
 
   size = info.size;
+
+  if (size > (1UL << 32) * 512) {
+    r = -EFBIG;
+    cerr << "rbd-nbd: image is too large (" << prettybyte_t(size) << ", max is "
+         << prettybyte_t((1UL << 32) * 512) << ")" << std::endl;
+    goto close_nbd;
+  }
+
   r = ioctl(nbd, NBD_SET_SIZE, size);
   if (r < 0) {
     r = -errno;

@@ -73,7 +73,6 @@ void _usage()
   cout << "  object rm                  remove object\n";
   cout << "  object unlink              unlink object from bucket index\n";
   cout << "  objects expire             run expired objects cleanup\n";
-  cout << "  period prepare             prepare a new period\n";
   cout << "  period delete              delete a period\n";
   cout << "  period get                 get period info\n";
   cout << "  period get-current         get current period info\n";
@@ -106,6 +105,11 @@ void _usage()
   cout << "  zonegroup remove           remove a zone from a zonegroup\n";
   cout << "  zonegroup rename           rename a zone group\n";
   cout << "  zonegroup list             list all zone groups set on this cluster\n";
+  cout << "  zonegroup placement list   list zonegroup's placement targets\n";
+  cout << "  zonegroup placement add    add a placement target id to a zonegroup\n";
+  cout << "  zonegroup placement modify modify a placement target of a specific zonegroup\n";
+  cout << "  zonegroup placement rm     remove a placement target from a zonegroup\n";
+  cout << "  zonegroup placement default  set a zonegroup's default placement target\n";
   cout << "  zonegroup-map get          show zonegroup-map\n";
   cout << "  zonegroup-map set          set zonegroup-map (requires infile)\n";
   cout << "  zone create                create a new zone\n";
@@ -115,6 +119,10 @@ void _usage()
   cout << "  zone set                   set zone cluster params (requires infile)\n";
   cout << "  zone list                  list all zones set on this cluster\n";
   cout << "  zone rename                rename a zone\n";
+  cout << "  zone placement list        list zone's placement targets\n";
+  cout << "  zone placement add         add a zone placement target\n";
+  cout << "  zone placement modify      modify a zone placement target\n";
+  cout << "  zone placement rm          remove a zone placement target\n";
   cout << "  pool add                   add an existing pool for data placement\n";
   cout << "  pool rm                    remove an existing pool from data placement set\n";
   cout << "  pools list                 list placement active set\n";
@@ -202,7 +210,16 @@ void _usage()
   cout << "   --source-zone             specify the source zone (for data sync)\n";
   cout << "   --default                 set entity (realm, zonegroup, zone) as default\n";
   cout << "   --read-only               set zone as read-only (when adding to zonegroup)\n";
+  cout << "   --placement-id            placement id for zonegroup placement commands\n";
+  cout << "   --tags=<list>             list of tags for zonegroup placement add and modify commands\n";
+  cout << "   --tags-add=<list>         list of tags to add for zonegroup placement modify command\n";
+  cout << "   --tags-rm=<list>          list of tags to remove for zonegroup placement modify command\n";
   cout << "   --endpoints=<list>        zone endpoints\n";
+  cout << "   --index_pool=<pool>       placement target index pool\n";
+  cout << "   --data_pool=<pool>        placement target data pool\n";
+  cout << "   --data_extra_pool=<pool>  placement target data extra (non-ec) pool\n";
+  cout << "   --placement-index-type=<type>\n";
+  cout << "                             placement target index type (normal, indexless, or #id)\n";
   cout << "   --fix                     besides checking bucket index, will also fix it\n";
   cout << "   --check-objects           bucket check: rebuilds bucket index according to\n";
   cout << "                             actual objects state\n";
@@ -228,6 +245,10 @@ void _usage()
   cout << "   --caps=<caps>             list of caps (e.g., \"usage=read, write; user=read\"\n";
   cout << "   --yes-i-really-mean-it    required for certain operations\n";
   cout << "   --reset-regions           reset regionmap when regionmap update\n";
+  cout << "   --bypass-gc               when specified with bucket deletion, triggers\n";
+  cout << "                             object deletions by not involving GC\n";
+  cout << "   --inconsistent-index      when specified with bucket deletion and bypass-gc set to true,\n";
+  cout << "                             ignores bucket index consistency\n";
   cout << "\n";
   cout << "<date> := \"YYYY-MM-DD[ hh:mm:ss]\"\n";
   cout << "\nQuota options:\n";
@@ -312,6 +333,11 @@ enum {
   OPT_ZONEGROUP_LIST,
   OPT_ZONEGROUP_REMOVE,
   OPT_ZONEGROUP_RENAME,
+  OPT_ZONEGROUP_PLACEMENT_ADD,
+  OPT_ZONEGROUP_PLACEMENT_MODIFY,
+  OPT_ZONEGROUP_PLACEMENT_RM,
+  OPT_ZONEGROUP_PLACEMENT_LIST,
+  OPT_ZONEGROUP_PLACEMENT_DEFAULT,
   OPT_ZONEGROUPMAP_GET,
   OPT_ZONEGROUPMAP_SET,
   OPT_ZONEGROUPMAP_UPDATE,
@@ -323,6 +349,10 @@ enum {
   OPT_ZONE_LIST,
   OPT_ZONE_RENAME,
   OPT_ZONE_DEFAULT,
+  OPT_ZONE_PLACEMENT_ADD,
+  OPT_ZONE_PLACEMENT_MODIFY,
+  OPT_ZONE_PLACEMENT_RM,
+  OPT_ZONE_PLACEMENT_LIST,
   OPT_CAPS_ADD,
   OPT_CAPS_RM,
   OPT_METADATA_GET,
@@ -364,7 +394,6 @@ enum {
   OPT_REALM_SET,
   OPT_REALM_DEFAULT,
   OPT_REALM_PULL,
-  OPT_PERIOD_PREPARE,
   OPT_PERIOD_DELETE,
   OPT_PERIOD_GET,
   OPT_PERIOD_GET_CURRENT,
@@ -399,6 +428,7 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
       strcmp(cmd, "opstate") == 0 ||
       strcmp(cmd, "orphans") == 0 || 
       strcmp(cmd, "period") == 0 ||
+      strcmp(cmd, "placement") == 0 ||
       strcmp(cmd, "pool") == 0 ||
       strcmp(cmd, "pools") == 0 ||
       strcmp(cmd, "quota") == 0 ||
@@ -538,8 +568,6 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
     if (strcmp(cmd, "list") == 0)
       return OPT_BI_LIST;
   } else if (strcmp(prev_cmd, "period") == 0) {
-    if (strcmp(cmd, "prepare") == 0)
-      return OPT_PERIOD_PREPARE;
     if (strcmp(cmd, "delete") == 0)
       return OPT_PERIOD_DELETE;
     if (strcmp(cmd, "get") == 0)
@@ -579,6 +607,18 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
       return OPT_REALM_DEFAULT;
     if (strcmp(cmd, "pull") == 0)
       return OPT_REALM_PULL;
+  } else if ((prev_prev_cmd && strcmp(prev_prev_cmd, "zonegroup") == 0) &&
+	     (strcmp(prev_cmd, "placement") == 0)) {
+    if (strcmp(cmd, "add") == 0)
+      return OPT_ZONEGROUP_PLACEMENT_ADD;
+    if (strcmp(cmd, "modify") == 0)
+      return OPT_ZONEGROUP_PLACEMENT_MODIFY;
+    if (strcmp(cmd, "rm") == 0)
+      return OPT_ZONEGROUP_PLACEMENT_RM;
+    if (strcmp(cmd, "list") == 0)
+      return OPT_ZONEGROUP_PLACEMENT_LIST;
+    if (strcmp(cmd, "default") == 0)
+      return OPT_ZONEGROUP_PLACEMENT_DEFAULT;
   } else if (strcmp(prev_cmd, "zonegroup") == 0 ||
 	     strcmp(prev_cmd, "region") == 0) {
     if (strcmp(cmd, "add") == 0)
@@ -622,6 +662,16 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
       return OPT_ZONEGROUPMAP_SET;
     if (strcmp(cmd, "update") == 0)
       return OPT_ZONEGROUPMAP_UPDATE;
+  } else if ((prev_prev_cmd && strcmp(prev_prev_cmd, "zone") == 0) &&
+	     (strcmp(prev_cmd, "placement") == 0)) {
+    if (strcmp(cmd, "add") == 0)
+      return OPT_ZONE_PLACEMENT_ADD;
+    if (strcmp(cmd, "modify") == 0)
+      return OPT_ZONE_PLACEMENT_MODIFY;
+    if (strcmp(cmd, "rm") == 0)
+      return OPT_ZONE_PLACEMENT_RM;
+    if (strcmp(cmd, "list") == 0)
+      return OPT_ZONE_PLACEMENT_LIST;
   } else if (strcmp(prev_cmd, "zone") == 0) {
     if (strcmp(cmd, "delete") == 0)
       return OPT_ZONE_DELETE;
@@ -1694,18 +1744,18 @@ static void get_md_sync_status(list<string>& status)
   }
 
   map<int, RGWMetadataLogInfo> master_shards_info;
-  string master_period;
+  string master_period = store->get_current_period_id();
 
-  ret = sync.read_master_log_shards_info(&master_period, &master_shards_info);
+  ret = sync.read_master_log_shards_info(master_period, &master_shards_info);
   if (ret < 0) {
     status.push_back(string("failed to fetch master sync status: ") + cpp_strerror(-ret));
     return;
   }
 
   map<int, string> shards_behind;
-
   if (sync_status.sync_info.period != master_period) {
-    status.push_back(string("master is on a different period: master_period=" + master_period + " local_period=" + sync_status.sync_info.period));
+    status.push_back(string("master is on a different period: master_period=" +
+                            master_period + " local_period=" + sync_status.sync_info.period));
   } else {
     for (auto local_iter : sync_status.sync_markers) {
       int shard_id = local_iter.first;
@@ -1725,7 +1775,7 @@ static void get_md_sync_status(list<string>& status)
 
   int total_behind = shards_behind.size() + (sync_status.sync_info.num_shards - num_inc);
   if (total_behind == 0) {
-    status.push_back("metadata is caught up with master");
+    push_ss(ss, status) << "metadata is caught up with master";
   } else {
     push_ss(ss, status) << "metadata is behind on " << total_behind << " shards";
 
@@ -2028,6 +2078,10 @@ int main(int argc, char **argv)
   string op_mask_str;
   string quota_scope;
   string object_version;
+  string placement_id;
+  list<string> tags;
+  list<string> tags_add;
+  list<string> tags_rm;
 
   int64_t max_objects = -1;
   int64_t max_size = -1;
@@ -2037,6 +2091,8 @@ int main(int argc, char **argv)
 
   int sync_stats = false;
   int reset_regions = false;
+  int bypass_gc = false;
+  int inconsistent_index = false;
 
   int extra_info = false;
 
@@ -2058,6 +2114,12 @@ int main(int argc, char **argv)
 
   string source_zone_name;
   string source_zone; /* zone id */
+
+  boost::optional<string> index_pool;
+  boost::optional<string> data_pool;
+  boost::optional<string> data_extra_pool;
+  RGWBucketIndexType placement_index_type = RGWBIType_Normal;
+  bool index_type_specified = false;
 
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
@@ -2250,7 +2312,10 @@ int main(int argc, char **argv)
      // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &extra_info, NULL, "--extra-info", (char*)NULL)) {
      // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &reset_regions, NULL, "--reset-regions", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &bypass_gc, NULL, "--bypass-gc", (char*)NULL)) {
+     // do nothing
+    } else if (ceph_argparse_binary_flag(args, i, &inconsistent_index, NULL, "--inconsistent-index", (char*)NULL)) {
+     // do nothing
     } else if (ceph_argparse_witharg(args, i, &val, "--caps", (char*)NULL)) {
       caps = val;
     } else if (ceph_argparse_witharg(args, i, &val, "-i", "--infile", (char*)NULL)) {
@@ -2309,6 +2374,14 @@ int main(int argc, char **argv)
       zonegroup_id = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--zonegroup-new-name", (char*)NULL)) {
       zonegroup_new_name = val;
+    } else if (ceph_argparse_witharg(args, i, &val, "--placement-id", (char*)NULL)) {
+      placement_id = val;
+    } else if (ceph_argparse_witharg(args, i, &val, "--tags", (char*)NULL)) {
+      get_str_list(val, tags);
+    } else if (ceph_argparse_witharg(args, i, &val, "--tags-add", (char*)NULL)) {
+      get_str_list(val, tags_add);
+    } else if (ceph_argparse_witharg(args, i, &val, "--tags-rm", (char*)NULL)) {
+      get_str_list(val, tags_rm);
     } else if (ceph_argparse_witharg(args, i, &val, "--api-name", (char*)NULL)) {
       api_name = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--zone-id", (char*)NULL)) {
@@ -2319,6 +2392,25 @@ int main(int argc, char **argv)
       get_str_list(val, endpoints);
     } else if (ceph_argparse_witharg(args, i, &val, "--source-zone", (char*)NULL)) {
       source_zone_name = val;
+    } else if (ceph_argparse_witharg(args, i, &val, "--index-pool", (char*)NULL)) {
+      index_pool = val;
+    } else if (ceph_argparse_witharg(args, i, &val, "--data-pool", (char*)NULL)) {
+      data_pool = val;
+    } else if (ceph_argparse_witharg(args, i, &val, "--data-extra-pool", (char*)NULL)) {
+      data_extra_pool = val;
+    } else if (ceph_argparse_witharg(args, i, &val, "--placement-index-type", (char*)NULL)) {
+      if (val == "normal") {
+        placement_index_type = RGWBIType_Normal;
+      } else if (val == "indexless") {
+        placement_index_type = RGWBIType_Indexless;
+      } else {
+        placement_index_type = (RGWBucketIndexType)strict_strtol(val.c_str(), 10, &err);
+        if (!err.empty()) {
+          cerr << "ERROR: failed to parse index type index: " << err << std::endl;
+          return EINVAL;
+        }
+      }
+      index_type_specified = true;
     } else if (strncmp(*i, "-", 1) == 0) {
       cerr << "ERROR: invalid flag " << *i << std::endl;
       return EINVAL;
@@ -2411,25 +2503,33 @@ int main(int argc, char **argv)
   // not a raw op if 'period pull' needs to look up remotes
   bool raw_period_pull = opt_cmd == OPT_PERIOD_PULL && remote.empty() && !url.empty();
 
-  bool raw_storage_op = (opt_cmd == OPT_ZONEGROUP_ADD || opt_cmd == OPT_ZONEGROUP_CREATE || opt_cmd == OPT_ZONEGROUP_DELETE ||
-			 opt_cmd == OPT_ZONEGROUP_GET || opt_cmd == OPT_ZONEGROUP_LIST ||  
-                         opt_cmd == OPT_ZONEGROUP_SET || opt_cmd == OPT_ZONEGROUP_DEFAULT ||
-			 opt_cmd == OPT_ZONEGROUP_RENAME || opt_cmd == OPT_ZONEGROUP_MODIFY ||
-			 opt_cmd == OPT_ZONEGROUP_REMOVE ||
-                         opt_cmd == OPT_ZONEGROUPMAP_GET || opt_cmd == OPT_ZONEGROUPMAP_SET ||
-                         opt_cmd == OPT_ZONEGROUPMAP_UPDATE ||
-			 opt_cmd == OPT_ZONE_CREATE || opt_cmd == OPT_ZONE_DELETE ||
-                         opt_cmd == OPT_ZONE_GET || opt_cmd == OPT_ZONE_SET || opt_cmd == OPT_ZONE_RENAME ||
-                         opt_cmd == OPT_ZONE_LIST || opt_cmd == OPT_ZONE_MODIFY || opt_cmd == OPT_ZONE_DEFAULT ||
-			 opt_cmd == OPT_REALM_CREATE || opt_cmd == OPT_PERIOD_PREPARE ||
-			 opt_cmd == OPT_PERIOD_DELETE || opt_cmd == OPT_PERIOD_GET ||
-			 opt_cmd == OPT_PERIOD_GET_CURRENT || opt_cmd == OPT_PERIOD_LIST ||
-                         raw_period_update || raw_period_pull ||
-			 opt_cmd == OPT_REALM_DELETE || opt_cmd == OPT_REALM_GET || opt_cmd == OPT_REALM_LIST ||
-			 opt_cmd == OPT_REALM_LIST_PERIODS ||
-			 opt_cmd == OPT_REALM_GET_DEFAULT || opt_cmd == OPT_REALM_REMOVE ||
-			 opt_cmd == OPT_REALM_RENAME || opt_cmd == OPT_REALM_SET ||
-			 opt_cmd == OPT_REALM_DEFAULT || opt_cmd == OPT_REALM_PULL);
+  std::set<int> raw_storage_ops_list = {OPT_ZONEGROUP_ADD, OPT_ZONEGROUP_CREATE, OPT_ZONEGROUP_DELETE,
+			 OPT_ZONEGROUP_GET, OPT_ZONEGROUP_LIST,
+                         OPT_ZONEGROUP_SET, OPT_ZONEGROUP_DEFAULT,
+			 OPT_ZONEGROUP_RENAME, OPT_ZONEGROUP_MODIFY,
+			 OPT_ZONEGROUP_REMOVE,
+			 OPT_ZONEGROUP_PLACEMENT_ADD, OPT_ZONEGROUP_PLACEMENT_RM,
+			 OPT_ZONEGROUP_PLACEMENT_MODIFY, OPT_ZONEGROUP_PLACEMENT_LIST,
+			 OPT_ZONEGROUP_PLACEMENT_DEFAULT,
+                         OPT_ZONEGROUPMAP_GET, OPT_ZONEGROUPMAP_SET,
+                         OPT_ZONEGROUPMAP_UPDATE,
+			 OPT_ZONE_CREATE, OPT_ZONE_DELETE,
+                         OPT_ZONE_GET, OPT_ZONE_SET, OPT_ZONE_RENAME,
+                         OPT_ZONE_LIST, OPT_ZONE_MODIFY, OPT_ZONE_DEFAULT,
+			 OPT_ZONE_PLACEMENT_ADD, OPT_ZONE_PLACEMENT_RM,
+			 OPT_ZONE_PLACEMENT_MODIFY, OPT_ZONE_PLACEMENT_LIST,
+			 OPT_REALM_CREATE,
+			 OPT_PERIOD_DELETE, OPT_PERIOD_GET,
+			 OPT_PERIOD_GET_CURRENT, OPT_PERIOD_LIST,
+			 OPT_REALM_DELETE, OPT_REALM_GET, OPT_REALM_LIST,
+			 OPT_REALM_LIST_PERIODS,
+			 OPT_REALM_GET_DEFAULT, OPT_REALM_REMOVE,
+			 OPT_REALM_RENAME, OPT_REALM_SET,
+			 OPT_REALM_DEFAULT, OPT_REALM_PULL};
+
+
+  bool raw_storage_op = (raw_storage_ops_list.find(opt_cmd) != raw_storage_ops_list.end() ||
+                         raw_period_update || raw_period_pull);
 
   if (raw_storage_op) {
     store = RGWStoreManager::get_raw_storage(g_ceph_context);
@@ -2455,29 +2555,6 @@ int main(int argc, char **argv)
 
   if (raw_storage_op) {
     switch (opt_cmd) {
-    case OPT_PERIOD_PREPARE:
-      {
-	RGWRealm realm(realm_id, realm_name);
-	int ret = realm.init(g_ceph_context, store);
-	if (ret < 0) {
-	  cerr << "could not init realm " << ": " << cpp_strerror(-ret) << std::endl;
-	  return ret;
-	}
-	RGWPeriod period;
-	ret = period.init(g_ceph_context, store, realm.get_id(), realm.get_name(), false);
-	if (ret < 0) {
-	  cerr << "failed to init period " << ": " << cpp_strerror(-ret) << std::endl;
-	  return ret;
-	}
-	ret = period.create();
-	if (ret < 0) {
-	  cerr << "ERROR: couldn't create period " << ": " << cpp_strerror(-ret) << std::endl;
-	  return ret;
-	}
-	encode_json("period", period, formatter);
-	formatter->flush(cout);
-      }
-      break;
     case OPT_PERIOD_DELETE:
       {
 	if (period_id.empty()) {
@@ -2676,7 +2753,7 @@ int main(int argc, char **argv)
 	  cerr << "failed to list realmss: " << cpp_strerror(-ret) << std::endl;
 	  return -ret;
 	}
-	formatter->open_object_section("realmss_list");
+	formatter->open_object_section("realms_list");
 	encode_json("default_info", default_id, formatter);
 	encode_json("realms", realms, formatter);
 	formatter->close_section();
@@ -2734,24 +2811,39 @@ int main(int argc, char **argv)
 	  cerr << "no realm name or id provided" << std::endl;
 	  return -EINVAL;
 	}
-        if (infile.empty()) {
-	  cerr << "no realm input file provided" << std::endl;
-	  return -EINVAL;
-        }
 	RGWRealm realm(realm_id, realm_name);
-	int ret = realm.init(g_ceph_context, store, false);
-	if (ret < 0) {
+	bool new_realm = false;
+	int ret = realm.init(g_ceph_context, store);
+	if (ret < 0 && ret != -ENOENT) {
 	  cerr << "failed to init realm: " << cpp_strerror(-ret) << std::endl;
 	  return -ret;
+	} else if (ret == -ENOENT) {
+	  new_realm = true;
 	}
 	ret = read_decode_json(infile, realm);
 	if (ret < 0) {
 	  return 1;
 	}
-	ret = realm.update();
-	if (ret < 0) {
-	  cerr << "ERROR: couldn't store realm info: " << cpp_strerror(-ret) << std::endl;
-	  return 1;
+	if (!realm_name.empty() && realm.get_name() != realm_name) {
+	  cerr << "mismatch between --rgw-realm " << realm_name << " and json input file name " <<
+	    realm.get_name() << std::endl;
+	  return EINVAL;
+	}
+	/* new realm */
+	if (new_realm) {
+	  cout << "clearing period and epoch for new realm" << std::endl;
+	  realm.clear_current_period_and_epoch();
+	  ret = realm.create();
+	  if (ret < 0) {
+	    cerr << "ERROR: couldn't create new realm: " << cpp_strerror(-ret) << std::endl;
+	    return 1;
+	  }
+	} else {
+	  ret = realm.update();
+	  if (ret < 0) {
+	    cerr << "ERROR: couldn't store realm info: " << cpp_strerror(-ret) << std::endl;
+	    return 1;
+	  }
 	}
 
         if (set_default) {
@@ -3181,6 +3273,81 @@ int main(int argc, char **argv)
 	  cerr << "failed to rename zonegroup: " << cpp_strerror(-ret) << std::endl;
 	  return -ret;
 	}
+      }
+      break;
+    case OPT_ZONEGROUP_PLACEMENT_LIST:
+      {
+	RGWZoneGroup zonegroup(zonegroup_id, zonegroup_name);
+	int ret = zonegroup.init(g_ceph_context, store);
+	if (ret < 0) {
+	  cerr << "failed to init zonegroup: " << cpp_strerror(-ret) << std::endl;
+	  return -ret;
+	}
+
+	encode_json("placement_targets", zonegroup.placement_targets, formatter);
+	formatter->flush(cout);
+	cout << std::endl;
+      }
+      break;
+    case OPT_ZONEGROUP_PLACEMENT_ADD:
+    case OPT_ZONEGROUP_PLACEMENT_MODIFY:
+    case OPT_ZONEGROUP_PLACEMENT_RM:
+    case OPT_ZONEGROUP_PLACEMENT_DEFAULT:
+      {
+        if (placement_id.empty()) {
+          cerr << "ERROR: --placement-id not specified" << std::endl;
+          return EINVAL;
+        }
+
+	RGWZoneGroup zonegroup(zonegroup_id, zonegroup_name);
+	int ret = zonegroup.init(g_ceph_context, store);
+	if (ret < 0) {
+	  cerr << "failed to init zonegroup: " << cpp_strerror(-ret) << std::endl;
+	  return -ret;
+	}
+
+        if (opt_cmd == OPT_ZONEGROUP_PLACEMENT_ADD) {
+          RGWZoneGroupPlacementTarget target;
+          target.name = placement_id;
+          for (auto& t : tags) {
+            target.tags.insert(t);
+          }
+          zonegroup.placement_targets[placement_id] = target;
+        } else if (opt_cmd == OPT_ZONEGROUP_PLACEMENT_MODIFY) {
+          RGWZoneGroupPlacementTarget& target = zonegroup.placement_targets[placement_id];
+          if (!tags.empty()) {
+            target.tags.clear();
+            for (auto& t : tags) {
+              target.tags.insert(t);
+            }
+          }
+          target.name = placement_id;
+          for (auto& t : tags_rm) {
+            target.tags.erase(t);
+          }
+          for (auto& t : tags_add) {
+            target.tags.insert(t);
+          }
+        } else if (opt_cmd == OPT_ZONEGROUP_PLACEMENT_RM) {
+          zonegroup.placement_targets.erase(placement_id);
+        } else if (opt_cmd == OPT_ZONEGROUP_PLACEMENT_DEFAULT) {
+          if (!zonegroup.placement_targets.count(placement_id)) {
+            cerr << "failed to find a zonegroup placement target named '"
+                << placement_id << "'" << std::endl;
+            return -ENOENT;
+          }
+          zonegroup.default_placement = placement_id;
+        }
+
+        zonegroup.post_process_params();
+        ret = zonegroup.update();
+        if (ret < 0) {
+          cerr << "failed to update zonegroup: " << cpp_strerror(-ret) << std::endl;
+          return -ret;
+        }
+
+        encode_json("placement_targets", zonegroup.placement_targets, formatter);
+        formatter->flush(cout);
       }
       break;
     case OPT_ZONEGROUPMAP_GET:
@@ -3627,6 +3794,85 @@ int main(int argc, char **argv)
 	}
       }
       break;
+    case OPT_ZONE_PLACEMENT_ADD:
+    case OPT_ZONE_PLACEMENT_MODIFY:
+    case OPT_ZONE_PLACEMENT_RM:
+      {
+        if (placement_id.empty()) {
+          cerr << "ERROR: --placement-id not specified" << std::endl;
+          return EINVAL;
+        }
+	RGWZoneParams zone(zone_id, zone_name);
+	int ret = zone.init(g_ceph_context, store);
+        if (ret < 0) {
+	  cerr << "failed to init zone: " << cpp_strerror(-ret) << std::endl;
+	  return -ret;
+	}
+
+        if (opt_cmd == OPT_ZONE_PLACEMENT_ADD) {
+          // pool names are required
+          if (!index_pool || index_pool->empty() ||
+              !data_pool || data_pool->empty()) {
+            cerr << "ERROR: need to specify both --index-pool and --data-pool" << std::endl;
+            return EINVAL;
+          }
+
+          RGWZonePlacementInfo& info = zone.placement_pools[placement_id];
+
+          info.index_pool = *index_pool;
+          info.data_pool = *data_pool;
+          if (data_extra_pool) {
+            info.data_extra_pool = *data_extra_pool;
+          }
+          if (index_type_specified) {
+            info.index_type = placement_index_type;
+          }
+        } else if (opt_cmd == OPT_ZONE_PLACEMENT_MODIFY) {
+          auto p = zone.placement_pools.find(placement_id);
+          if (p == zone.placement_pools.end()) {
+            cerr << "ERROR: zone placement target '" << placement_id
+                << "' not found" << std::endl;
+            return -ENOENT;
+          }
+          auto& info = p->second;
+          if (index_pool && !index_pool->empty()) {
+            info.index_pool = *index_pool;
+          }
+          if (data_pool && !data_pool->empty()) {
+            info.data_pool = *data_pool;
+          }
+          if (data_extra_pool) {
+            info.data_extra_pool = *data_extra_pool;
+          }
+          if (index_type_specified) {
+            info.index_type = placement_index_type;
+          }
+        } else if (opt_cmd == OPT_ZONE_PLACEMENT_RM) {
+          zone.placement_pools.erase(placement_id);
+        }
+
+        ret = zone.update();
+        if (ret < 0) {
+          cerr << "failed to save zone info: " << cpp_strerror(-ret) << std::endl;
+          return -ret;
+        }
+
+        encode_json("zone", zone, formatter);
+        formatter->flush(cout);
+      }
+      break;
+    case OPT_ZONE_PLACEMENT_LIST:
+      {
+	RGWZoneParams zone(zone_id, zone_name);
+	int ret = zone.init(g_ceph_context, store);
+	if (ret < 0) {
+	  cerr << "unable to initialize zone: " << cpp_strerror(-ret) << std::endl;
+	  return -ret;
+	}
+	encode_json("placement_pools", zone.placement_pools, formatter);
+	formatter->flush(cout);
+      }
+      break;
     }
     return 0;
   }
@@ -3718,6 +3964,7 @@ int main(int argc, char **argv)
   bucket_op.set_check_objects(check_objects);
   bucket_op.set_delete_children(delete_child_objects);
   bucket_op.set_fix_index(fix);
+  bucket_op.set_max_aio(max_concurrent_ios);
 
   // required to gather errors from operations
   std::string err_msg;
@@ -4120,7 +4367,7 @@ int main(int argc, char **argv)
         formatter->open_array_section("log_entries");
 
       do {
-	uint64_t total_time =  entry.total_time.sec() * 1000000LL * entry.total_time.usec();
+	uint64_t total_time =  entry.total_time.sec() * 1000000LL + entry.total_time.usec();
 
         agg_time += total_time;
         agg_bytes_sent += entry.bytes_sent;
@@ -4665,7 +4912,11 @@ next:
   }
 
   if (opt_cmd == OPT_BUCKET_RM) {
-    RGWBucketAdminOp::remove_bucket(store, bucket_op);
+    if (inconsistent_index == false) {
+      RGWBucketAdminOp::remove_bucket(store, bucket_op, bypass_gc, true);
+    } else {
+      RGWBucketAdminOp::remove_bucket(store, bucket_op, bypass_gc, false);
+    }
   }
 
   if (opt_cmd == OPT_GC_LIST) {

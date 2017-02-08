@@ -1066,18 +1066,15 @@ WRITE_CLASS_ENCODER(RGWDefaultZoneGroupInfo)
 
 struct RGWZoneGroupPlacementTarget {
   string name;
-  list<string> tags;
+  set<string> tags;
 
   bool user_permitted(list<string>& user_tags) {
     if (tags.empty()) {
       return true;
     }
-    for (list<string>::iterator uiter = user_tags.begin(); uiter != user_tags.end(); ++uiter) { /* we don't expect many of either, so we can handle this kind of lookup */
-      string& rule = *uiter;
-      for (list<string>::iterator iter = tags.begin(); iter != tags.end(); ++iter) {
-        if (rule == *iter) {
-          return true;
-        }
+    for (auto& rule : user_tags) {
+      if (tags.find(rule) != tags.end()) {
+        return true;
       }
     }
     return false;
@@ -1230,6 +1227,7 @@ struct RGWPeriodMap
   void reset() {
     zonegroups.clear();
     zonegroups_by_api.clear();
+    master_zonegroup.clear();
   }
 
   uint32_t get_zone_short_id(const string& zone_id) const;
@@ -1383,7 +1381,10 @@ public:
     return current_period;
   }
   int set_current_period(RGWPeriod& period);
-
+  void clear_current_period_and_epoch() {
+    current_period.clear();
+    epoch = 0;
+  }
   epoch_t get_epoch() const { return epoch; }
 
   string get_control_oid();
@@ -2988,6 +2989,8 @@ public:
 
   librados::Rados* get_rados_handle();
 
+  int delete_obj_aio(rgw_obj& obj, rgw_bucket& bucket, RGWBucketInfo& info, RGWObjState *astate,
+                     list<librados::AioCompletion *>& handles, bool keep_index_consistent);
  private:
   /**
    * This is a helper method, it generates a list of bucket index objects with the given
