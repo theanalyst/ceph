@@ -565,6 +565,15 @@ int RGWOp::verify_op_mask()
   return 0;
 }
 
+int RGWGetObjTags::verify_permission()
+{
+  if (!verify_object_permission(s, RGW_PERM_READ))
+    return -EACCES;
+
+  return 0;
+}
+
+
 int RGWOp::do_aws4_auth_completion()
 {
   int ret;

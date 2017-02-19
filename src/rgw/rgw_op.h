@@ -243,6 +243,18 @@ public:
   }
 };
 
+class RGWGetObjTags : public RGWOp {
+ public:
+  RGWGetObjTags() {}
+  ~RGWGetObjTags() {}
+  int verify_permission();
+  void execute() { }
+
+  virtual void send_response() = 0;
+  virtual const string name() { return "get_obj_tags"; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+};
+
 class RGWBulkDelete : public RGWOp {
 public:
   struct acct_path_t {
