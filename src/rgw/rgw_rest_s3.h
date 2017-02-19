@@ -42,6 +42,16 @@ public:
   void set_custom_http_response(int http_ret) { custom_http_ret = http_ret; }
 };
 
+class RGWGetObjTags_ObjStore_S3 : public RGWGetObjTags_ObjStore
+{
+public:
+  RGWGetObjTags_ObjStore_S3() {}
+  ~RGWGetObjTags_ObjStore_S3() {}
+
+  void send_response() override;
+  // void execute () override {};
+};
+
 class RGWListBuckets_ObjStore_S3 : public RGWListBuckets_ObjStore {
 public:
   RGWListBuckets_ObjStore_S3() {}
