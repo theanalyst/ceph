@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #ifndef RGW_TAG_S3_H
 #define RGW_TAG_S3_H
 
@@ -42,49 +45,32 @@ public:
   //void to_xml(CephContext *cct, ostream& out) const;
 };
 
-class RGWObjTags_S3: public RGWObjTags, public XMLObj
+class RGWObjTagSet_S3: public XMLObj
 {
 public:
   RGWObjTags_S3() {}
   ~RGWObjTags_S3() {}
 
   bool xml_end(const char* el);
-  void to_xml(CephContext *cct, ostream& out) const;
+//  void to_xml(CephContext *cct, ostream& out) const;
 };
 
-class RGWObjTagSet_S3: public XMLObj
+class RGWObjTagging_S3: public RGWObjTags, XMLObj
 {
 public:
   RGWObjTagSet_S3() {}
   ~RGWObjTagSet_S3() {}
 
   bool xml_end(const char* el);
-  void to_xml(CephContext *cct, ostream& out) const;
+  void dump_xml(Formatter *f);
 };
 
-// class RGWObjTags_S3 : public RGWObjTags, public XMLObj
-// {
-// public:
-//   RGWObjTags_S3() {}
-//   ~RGWObjTags_S3() {}
-
-//   void to_xml(ostream& out);
-//   void dump_xml(Formatter *f) const;
-
-// };
-
-
-
-// class RGWObjTagsParser : public RGWXMLParser
-// {
-//   XMLObj *alloc_obj(const char *el){
-//     return new XMLObj;
-//   }
-// public:
-//   RGWObjTagsParser() {}
-//   ~RGWObjTagsParser() {}
-
-//   int get_obj_tags(map <string,string>& tags);
-// };
+class RGWObjTagsXMLParser : public RGWXMLParser
+{
+  XMLObj *alloc_obj(const char *el);
+public:
+  RGWObjTagsParser() {}
+  ~RGWObjTagsParser() {}
+};
 
 #endif /* RGW_TAG_S3_H */

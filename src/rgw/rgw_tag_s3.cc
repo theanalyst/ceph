@@ -28,43 +28,51 @@ bool RGWObjTagEntry_S3::xml_end(const char* el){
   return true;
 }
 
-bool RGWObjTags_S3::xml_end(const char* el){
-  XMLObjIter iter = find("Tag");
-  RGWObjTagEntry_S3 *tag = static_cast<RGWObjTagEntry_S3 *>(iter.get_next());
-  while (tag) {
-    const string& key = tag->get_key();
-    tags[key]=tag->get_val();
-    add_tag(key,val);
-    tag = static_cast<RGWObjTagEntry_S3 *>(iter.get_next());
+bool RGWObjTagging_S3::xml_end(const char* el){
+  RGWObjTagSet_S3 *tagset = static_cast<RGWObjTagSet_S3 *> (find_first_of("TagSet"));
+  if (tagset){
+      XMLObjIter iter = find("Tag");
+      RGWObjTagEntry_S3 *tagentry = static_cast<RGWObjTagEntry_S3 *>(iter.get_next());
+      while (tagentry) {
+	  const string& key = tagentry->get_key();
+	  const string& val = tagentry->get_val();
+	  add_tag(key,val);
+	  tagentry = static_cast<RGWObjTagEntry_S3 *>(iter.get_next());
+      }
   }
-}
-
-void RGWObjTags_S3::to_xml(CephContext* cct, ostream& out){
-  for (const auto& tag: tags) {
-    out << "<Tag>";
-    out << "<Key>" << tag->first << "</Key>";
-    if (!tag->second.empty())
-      out << "<Value>" << tag->second << "</Value>";
-    out << "</Tag>"
-  }
-}
-
-bool RGWObjTagSet_S3::xml_end(const char* el){
-  RGWObjTags_S3 *tags = static_cast<RGWObjTagSet_S3 *> (find_first_of("TagSet"));
-  return (tags != nullptr);
-}
-
-void RGWObjTagSet_S3::to_xml(CephContext* cct, ostream& out){
-  out << "<TagSet>";
 
 }
-// void RGWObjTags_S3::to_xml(ostream& out){
-//   for (const auto& tag : tags){
-//     out << "<Key>" << tag->first;
-//     if (!tag->second.empty())
-//       out << "<Value>" << tag->second;
-//   }
-// }
+
+void RGWObjTagging_S3::dump_xml(Formatter &f){
+    f.open_section_in_ns("Tagging");
+    f.open_object_section("TagSet");
+    for (const auto& tag: tags){
+	f.open_section("Tags");
+	f.open_section("Key");
+	f.dump_string(tag->first);
+	if (tag->second){
+	    f.open_section("Value");
+	    f.dump_string(tag->second);
+	}
+    }
+}
+
+XMLObj *RGWObjTagsXMLParser::alloc_obj(const char *el){
+    XMLObj* obj = nullptr;
+    if(strcmp(el,"Tagging") == 0) {
+	obj = new RGWObjTagging_S3();
+    } else if (strcmp(el,"TagSet") == 0) {
+	obj = new RGWTagSet_S3();
+    } else if (strcmp(el,"Tag") == 0) {
+	obj = new RGWTag_S3();
+    } else if (strcmp(el,"Key") == 0) {
+	obj = new RGWTagKey_S3();
+    } else if (strcmp(el,"Value") == 0) {
+	obj = new RGWTagValue_S3();
+    }
+
+    return obj;
+}
 
 // void RGWObjTags_S3::dump_xml(Formatter *f) const {
 //   f->open_object_section_in_ns("Tagging", XMLNS_AWS_S3);
