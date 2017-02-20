@@ -25,14 +25,14 @@ class RGWObjTags
   }
 
   void decode(bufferlist::iterator &bl) {
-    DECODE_START(1,1,bl);
+    DECODE_START_LEGACY_COMPAT_LEN(1, 1, 1, bl);
     ::decode(tags,bl);
     DECODE_FINISH(bl);
   }
 
   void dump(Formatter *f) const;
   int add_tag(const string& key, const string& val="");
-  int count() {return tags.size()};
+  int count() const {return tags.size();}
   int set_from_string(const string& input); // implement me!
   const map <string,string>& get_tags() const {return tags;}
 };
