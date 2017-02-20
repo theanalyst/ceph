@@ -3074,8 +3074,7 @@ RGWOp *RGWHandler_REST_Obj_S3::op_get()
     return new RGWGetACLs_ObjStore_S3;
   } else if (s->info.args.exists("uploadId")) {
     return new RGWListMultipart_ObjStore_S3;
-  }
-  else if (s->info.args.exists("tagging")) {
+  } else if (s->info.args.exists("tagging")) {
     return new RGWGetObjTags_ObjStore_S3;
   }
   return get_obj_op(true);
