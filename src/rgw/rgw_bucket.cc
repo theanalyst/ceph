@@ -134,9 +134,8 @@ int rgw_read_user_buckets(RGWRados * store,
     if (ret < 0)
       return ret;
 
-    for (list<cls_user_bucket_entry>::iterator q = entries.begin(); q != entries.end(); ++q) {
-      RGWBucketEnt e(*q);
-      buckets.add(e);
+    for (const auto& entry : entries) {
+      buckets.add(RGWBucketEnt(user_id, entry));
       total++;
     }
 
@@ -225,6 +224,7 @@ int rgw_link_bucket(RGWRados *store, const rgw_user& user_id, rgw_bucket& bucket
 
   ep.linked = true;
   ep.owner = user_id;
+  ep.bucket = bucket;
   ret = store->put_bucket_entrypoint_info(tenant_name, bucket_name, ep, false, ot, real_time(), &attrs);
   if (ret < 0)
     goto done_err;
@@ -596,7 +596,7 @@ int rgw_remove_bucket(RGWRados *store, rgw_bucket& bucket, bool delete_children)
 static int aio_wait(librados::AioCompletion *handle)
 {
   librados::AioCompletion *c = (librados::AioCompletion *)handle;
-  c->wait_for_complete();
+  c->wait_for_safe();
   int ret = c->get_return_value();
   c->release();
   return ret;
@@ -899,7 +899,7 @@ int RGWBucket::link(RGWBucketAdminOpState& op_state, std::string *err_msg)
     rgw_obj obj_bucket_instance(bucket_instance, no_oid);
     r = store->system_obj_set_attr(NULL, obj_bucket_instance, RGW_ATTR_ACL, aclbl, &objv_tracker);
 
-    r = rgw_link_bucket(store, user_info.user_id, bucket, real_time());
+    r = rgw_link_bucket(store, user_info.user_id, bucket_info.bucket, real_time());
     if (r < 0)
       return r;
   }

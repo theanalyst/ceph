@@ -802,6 +802,7 @@ OPTION(osd_debug_skip_full_check_in_backfill_reservation, OPT_BOOL, false)
 OPTION(osd_debug_reject_backfill_probability, OPT_DOUBLE, 0)
 OPTION(osd_debug_inject_copyfrom_error, OPT_BOOL, false)  // inject failure during copyfrom completion
 OPTION(osd_debug_randomize_hobject_sort_order, OPT_BOOL, false)
+OPTION(osd_enxio_on_misdirected_op, OPT_BOOL, false)
 OPTION(osd_debug_verify_cached_snaps, OPT_BOOL, false)
 OPTION(osd_enable_op_tracker, OPT_BOOL, true) // enable/disable OSD op tracking
 OPTION(osd_num_op_tracker_shard, OPT_U32, 32) // The number of shards for holding the ops
@@ -1429,6 +1430,7 @@ OPTION(rgw_objexp_hints_num_shards, OPT_U32, 127) // maximum number of parts in 
 OPTION(rgw_objexp_chunk_size, OPT_U32, 100) // maximum number of entries in a single operation when processing objexp data
 
 OPTION(rgw_enable_static_website, OPT_BOOL, false) // enable static website feature
+OPTION(rgw_log_http_headers, OPT_STR, "" ) // list of HTTP headers to log when seen, ignores case (e.g., http_x_forwarded_for
 
 OPTION(rgw_num_async_rados_threads, OPT_INT, 32) // num of threads to use for async rados operations
 OPTION(rgw_md_notify_interval_msec, OPT_INT, 200) // metadata changes notification interval to followers
