@@ -32,7 +32,7 @@ class RGWObjTags
 
   void dump(Formatter *f) const;
   int add_tag(const string& key, const string& val="");
-  int count() const {return tags.size();}
+  size_t count() const {return tags.size();}
   int set_from_string(const string& input); // implement me!
   const map <string,string>& get_tags() const {return tags;}
 };
