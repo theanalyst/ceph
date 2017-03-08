@@ -14,8 +14,6 @@
 #include "rgw_tag.h"
 #include "rgw_xml.h"
 
-using namespace std;
-
 class RGWObjTagKey_S3: public XMLObj
 {
 public:
@@ -32,16 +30,16 @@ public:
 
 class RGWObjTagEntry_S3: public XMLObj
 {
-  string key;
-  string val;
+  std::string key;
+  std::string val;
 public:
   RGWObjTagEntry_S3() {}
-  RGWObjTagEntry_S3(string k,string v):key(k),val(v) {};
+  RGWObjTagEntry_S3(std::string k,std::string v):key(k),val(v) {};
   ~RGWObjTagEntry_S3() {}
 
   bool xml_end(const char* el);
-  const string& get_key () const { return key;}
-  const string& get_val () const { return val;}
+  const std::string& get_key () const { return key;}
+  const std::string& get_val () const { return val;}
   //void to_xml(CephContext *cct, ostream& out) const;
 };
 
