@@ -322,14 +322,14 @@ class RGWGetObjTags : public RGWOp {
  protected:
   bufferlist tags_bl;
  public:
-  RGWGetObjTags() {}
-  ~RGWGetObjTags() {}
+  RGWGetObjTags() = default;
+  ~RGWGetObjTags() = default;
   int verify_permission();
   void execute();
   void pre_exec();
 
   virtual void send_response_data(bufferlist& bl) = 0;
-  virtual const string name() { return "get_obj_tags"; }
+  virtual const string name() noexcept override { return "get_obj_tags"; }
   virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
 };
 
