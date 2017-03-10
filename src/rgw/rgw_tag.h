@@ -7,13 +7,10 @@
 
 #include "rgw_common.h"
 
-using std::string;
-using std::map;
-
 class RGWObjTags
 {
  protected:
-  map <string, string> tags;
+  std::map <std::string, std::string> tags;
  public:
   RGWObjTags() {}
   ~RGWObjTags() {}
@@ -31,10 +28,10 @@ class RGWObjTags
   }
 
   void dump(Formatter *f) const;
-  int add_tag(const string& key, const string& val="");
+  int add_tag(const std::string& key, const std::string& val="");
   size_t count() const {return tags.size();}
-  int set_from_string(const string& input); // implement me!
-  const map <string,string>& get_tags() const {return tags;}
+  int set_from_string(const std::string& input); // implement me!
+  const map <std::string,std::string>& get_tags() const {return tags;}
 };
 WRITE_CLASS_ENCODER(RGWObjTags)
 
