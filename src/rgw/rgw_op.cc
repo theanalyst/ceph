@@ -654,7 +654,12 @@ void RGWPutObjTags::execute()
 
   attrs[RGW_ATTR_TAGS] = tags_bl;
   op_ret = store->set_attrs(s->obj_ctx, obj, attrs, NULL);
+
   // handle ECANCELD
+  if (op_ret == -ECANCELED){
+    op_ret = -ERR_TAG_CONFLICT;
+  }
+
 }
 
 int RGWOp::do_aws4_auth_completion()
