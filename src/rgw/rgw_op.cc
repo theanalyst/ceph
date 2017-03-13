@@ -591,8 +591,7 @@ void RGWGetObjTags::execute()
   rgw_obj obj;
   map<string,bufferlist> attrs;
 
-  obj = rgw_obj(s->bucket, s->object.name);
-  obj.set_instance(s->object.instance);
+  obj = rgw_obj(s->bucket, s->object);
 
   store->set_atomic(s->obj_ctx, obj);
 
@@ -619,26 +618,18 @@ void RGWPutObjTags::execute()
   if (op_ret < 0)
     return;
 
-  rgw_obj obj;
-  obj = rgw_obj(s->bucket, s->object.name);
-  obj.set_instance(s->object.instance);
 
-  map <string, bufferlist> attrs;
-
-  store->set_atomic(s->obj_ctx, obj);
-
-  op_ret = get_obj_attrs(store, s, obj, attrs);
-  if (op_ret < 0)
-    return;
-
-  attrs[RGW_ATTR_TAGS] = tags_bl;
-  op_ret = store->set_attrs(s->obj_ctx, obj, attrs, NULL);
-
-  // handle ECANCELD
-  if (op_ret == -ECANCELED){
-    op_ret = -ERR_TAG_CONFLICT;
+  if (!s->object.empty()){
+    rgw_obj obj;
+    obj = rgw_obj(s->bucket, s->object);
+    store->set_atomic(s->obj_ctx, obj);
+    op_ret = modify_obj_attr(store, s, obj, RGW_ATTR_TAGS, tags_bl);
+    if (op_ret == -ECANCELED){
+      op_ret = -ERR_TAG_CONFLICT;
+    }
+  } else {
+    op_ret= -EINVAL; // we only support tagging on existing objects
   }
-
 }
 
 int RGWOp::do_aws4_auth_completion()
