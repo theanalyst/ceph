@@ -29,21 +29,26 @@ bool RGWObjTagEntry_S3::xml_end(const char* el){
 }
 
 bool RGWObjTagSet_S3::xml_end(const char* el){
-  int ret;
   XMLObjIter iter = find("Tag");
   RGWObjTagEntry_S3 *tagentry = static_cast<RGWObjTagEntry_S3 *>(iter.get_next());
   while (tagentry) {
     const string& key = tagentry->get_key();
     const string& val = tagentry->get_val();
-    // TODO: this is wrong, we should probably do a rebuild and return different types of errors here
-    ret = this->add_tag(key,val);
-    if (ret != 0)
-      return false;
+    add_tag(key,val);
     tagentry = static_cast<RGWObjTagEntry_S3 *>(iter.get_next());
   }
   return true;
 }
 
+int RGWObjTagSet_S3::rebuild(RGWObjTags& dest){
+  int ret;
+  for (const auto &it: tags){
+    ret = dest.check_and_add_tag(it.first, it.second);
+    if (ret < 0)
+      return ret;
+  }
+  return 0;
+}
 
 bool RGWObjTagging_S3::xml_end(const char* el){
   RGWObjTagSet_S3 *tagset = static_cast<RGWObjTagSet_S3 *> (find_first("TagSet"));

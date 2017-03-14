@@ -10,11 +10,15 @@ static constexpr uint32_t MAX_OBJ_TAGS=10;
 static constexpr uint32_t MAX_TAG_KEY_SIZE=128;
 static constexpr uint32_t MAX_TAG_VAL_SIZE=256;
 
-int RGWObjTags::add_tag(const string&key, const string& val){
+void RGWObjTags::add_tag(const string&key, const string& val){
+  tags[key] = val;
+}
+
+int RGWObjTags::check_and_add_tag(const string&key, const string& val){
   if (tags.size() == MAX_OBJ_TAGS || key.size() > MAX_TAG_KEY_SIZE || val.size() > MAX_TAG_VAL_SIZE){
     // amz doesn't seem to support a modify op, so we don't have to check for
     // the key existence
-    return -EINVAL;
+    return -ERR_INVALID_TAG;
   }
   tags[key] = val;
   return 0;

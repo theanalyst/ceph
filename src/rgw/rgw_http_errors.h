@@ -38,6 +38,7 @@ const static struct rgw_http_errors RGW_HTTP_ERRORS[] = {
     { ERR_MALFORMED_XML, 400, "MalformedXML" },
     { ERR_AMZ_CONTENT_SHA256_MISMATCH, 400, "XAmzContentSHA256Mismatch" },
     { ERR_MALFORMED_DOC, 400, "MalformedPolicyDocument" },
+    { ERR_INVALID_TAG, 400, "InvalidTag"},
     { ERR_LENGTH_REQUIRED, 411, "MissingContentLength" },
     { EACCES, 403, "AccessDenied" },
     { EPERM, 403, "AccessDenied" },

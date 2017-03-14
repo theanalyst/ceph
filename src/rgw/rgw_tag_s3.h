@@ -51,6 +51,7 @@ public:
 
   bool xml_end(const char *el);
   void dump_xml(Formatter *f);
+  int rebuild(RGWObjTags& dest);
 };
 
 class RGWObjTagging_S3: public XMLObj

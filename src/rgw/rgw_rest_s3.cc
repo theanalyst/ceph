@@ -378,23 +378,26 @@ int RGWPutObjTags_ObjStore_S3::get_params()
 
   auto data_deleter = std::unique_ptr<char, decltype(free)*>{data, free};
 
-  ldout(s->cct, 20) << "read len=" << len << " data=" << (data ? data : "") << dendl;
-
   if (!parser.parse(data, len, 1)) {
     return -ERR_MALFORMED_XML;
   }
 
-  RGWObjTagSet_S3 *obj_tags;
+  RGWObjTagSet_S3 *obj_tags_s3;
   RGWObjTagging_S3 *tagging;
 
   tagging = static_cast<RGWObjTagging_S3 *>(parser.find_first("Tagging"));
-  obj_tags = static_cast<RGWObjTagSet_S3 *>(tagging->find_first("TagSet"));
-  if(!obj_tags){
+  obj_tags_s3 = static_cast<RGWObjTagSet_S3 *>(tagging->find_first("TagSet"));
+  if(!obj_tags_s3){
     return -ERR_MALFORMED_XML;
   }
 
-  obj_tags->encode(tags_bl);
-  ldout(s->cct, 20) << "Read " << obj_tags->count() << "tags" << dendl;
+  RGWObjTags obj_tags;
+  r = obj_tags_s3->rebuild(obj_tags);
+  if (r < 0)
+    return r;
+
+  obj_tags.encode(tags_bl);
+  ldout(s->cct, 20) << "Read " << obj_tags.count() << "tags" << dendl;
 
   return 0;
 }
