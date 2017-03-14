@@ -46,6 +46,7 @@ using ceph::crypto::MD5;
 #define RGW_AMZ_PREFIX "x-amz-"
 #define RGW_AMZ_META_PREFIX RGW_AMZ_PREFIX "meta-"
 #define RGW_AMZ_WEBSITE_REDIRECT_LOCATION RGW_AMZ_PREFIX "website-redirect-location"
+#define RGW_AMZ_TAG_COUNT RGW_AMZ_PREFIX "tagging-count"
 
 #define RGW_SYS_PARAM_PREFIX "rgwx-"
 

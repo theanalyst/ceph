@@ -282,6 +282,15 @@ int RGWGetObj_ObjStore_S3::send_response_data(bufferlist& bl, off_t bl_ofs,
         /* User custom metadata. */
         name += sizeof(RGW_ATTR_PREFIX) - 1;
         dump_header(s, name, iter->second);
+      } else if (iter->first.compare(RGW_ATTR_TAGS) == 0) {
+        RGWObjTags obj_tags;
+        try{
+          bufferlist::iterator it = iter->second.begin();
+          obj_tags.decode(it);
+        } catch (buffer::error &err) {
+          ldout(s->cct,0) << "Error caught buffer::error couldn't decode TagSet " << dendl;
+        }
+        dump_header(s, RGW_AMZ_TAG_COUNT, obj_tags.count());
       }
     }
   }
