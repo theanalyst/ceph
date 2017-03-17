@@ -31,7 +31,7 @@ class RGWObjTags
   void add_tag(const std::string& key, const std::string& val="");
   int check_and_add_tag(const std::string& key, const std::string& val="");
   size_t count() const {return tags.size();}
-  int set_from_string(const std::string& input); // implement me!
+  int set_from_string(const std::string& input);
   const map <std::string,std::string>& get_tags() const {return tags;}
 };
 WRITE_CLASS_ENCODER(RGWObjTags)

@@ -40,6 +40,7 @@
 
 #include "rgw_lc.h"
 #include "rgw_torrent.h"
+#include "rgw_tag.h"
 
 #include "include/assert.h"
 
@@ -946,6 +947,7 @@ protected:
   string etag;
   bool chunked_upload;
   RGWAccessControlPolicy policy;
+  std::unique_ptr <RGWObjTags> obj_tags;
   const char *dlo_manifest;
   RGWSLOInfo *slo_info;
   map<string, bufferlist> attrs;
@@ -968,6 +970,7 @@ public:
                 copy_source_range_fst(0),
                 copy_source_range_lst(0),
                 chunked_upload(0),
+                obj_tags(nullptr),
                 dlo_manifest(NULL),
                 slo_info(NULL),
                 olh_epoch(0) {}
@@ -1887,6 +1890,20 @@ static inline void encode_delete_at_attr(boost::optional<ceph::real_time> delete
   ::encode(*delete_at, delatbl);
   attrs[RGW_ATTR_DELETE_AT] = delatbl;
 } /* encode_delete_at_attr */
+
+static inline void encode_obj_tags_attr(RGWObjTags* obj_tags, map<string, bufferlist>& attrs)
+{
+  if (obj_tags == nullptr){
+    // we assume the user submitted a tag format which we couldn't parse since
+    // this wouldn't be parsed later by get/put obj tags, lets delete if the
+    // attr was populated
+    return;
+  }
+
+  bufferlist tagsbl;
+  obj_tags->encode(tagsbl);
+  attrs[RGW_ATTR_TAGS] = tagsbl;
+}
 
 static inline int encode_dlo_manifest_attr(const char * const dlo_manifest,
 					  map<string, bufferlist>& attrs)

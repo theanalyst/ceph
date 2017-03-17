@@ -23,3 +23,23 @@ int RGWObjTags::check_and_add_tag(const string&key, const string& val){
   tags[key] = val;
   return 0;
 }
+
+int RGWObjTags::set_from_string(const string& input){
+  string url_decoded_input;
+  bool decoded=url_decode(input, url_decoded_input);
+  if (!decoded)
+    return -EINVAL;
+
+  int ret=0;
+  for (const auto& kv: split(url_decoded_input, '&')){
+    auto p = kv.find_first_of("=");
+    if (p+1 != string::npos){
+      ret = check_and_add_tag(kv.substr(0,p), kv.substr(p+1));
+    } else {
+      ret = check_and_add_tag(kv);
+    }
+    if (ret < 0)
+      return ret;
+  }
+  return ret;
+}

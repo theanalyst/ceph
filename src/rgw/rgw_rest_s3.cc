@@ -1266,6 +1266,17 @@ int RGWPutObj_ObjStore_S3::get_params()
 
   } /* copy_source */
 
+  /* handle object tagging */
+  auto tag_str = s->info.env->get("HTTP_X_AMZ_TAGGING");
+  if (tag_str){
+    obj_tags.reset(new RGWObjTags());
+    ret = obj_tags->set_from_string(tag_str);
+    if (ret < 0){
+      ldout(s->cct,0) << "setting obj tags failed with " << ret << dendl;
+      return ret;
+    }
+  }
+
   return RGWPutObj_ObjStore::get_params();
 }
 

@@ -3269,6 +3269,7 @@ void RGWPutObj::execute()
   populate_with_generic_attrs(s, attrs);
   rgw_get_request_metadata(s->cct, s->info, attrs);
   encode_delete_at_attr(delete_at, attrs);
+  encode_obj_tags_attr(obj_tags.get(), attrs);
 
   /* Add a custom metadata to expose the information whether an object
    * is an SLO or not. Appending the attribute must be performed AFTER
