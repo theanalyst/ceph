@@ -597,9 +597,10 @@ void RGWGetObjTags::execute()
 
   op_ret = get_obj_attrs(store, s, obj, attrs);
   auto tags = attrs.find(RGW_ATTR_TAGS);
-  if(tags == attrs.end())
-    return;
-  tags_bl.append(tags->second);
+  if(tags != attrs.end()){
+    has_tags = true;
+    tags_bl.append(tags->second);
+  }
   send_response_data(tags_bl);
 }
 

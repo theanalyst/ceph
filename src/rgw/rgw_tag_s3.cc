@@ -57,7 +57,6 @@ bool RGWObjTagging_S3::xml_end(const char* el){
 }
 
 void RGWObjTagSet_S3::dump_xml(Formatter *f){
-  f->open_object_section("TagSet");
   for (const auto& tag: tags){
     f->open_object_section("Tag");
     f->dump_string("Key", tag.first);
@@ -66,7 +65,6 @@ void RGWObjTagSet_S3::dump_xml(Formatter *f){
     }
     f->close_section();
   }
-  f->close_section();
 }
 
 XMLObj *RGWObjTagsXMLParser::alloc_obj(const char *el){

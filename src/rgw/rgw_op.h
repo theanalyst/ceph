@@ -322,8 +322,9 @@ public:
 class RGWGetObjTags : public RGWOp {
  protected:
   bufferlist tags_bl;
+  bool has_tags;
  public:
-  RGWGetObjTags() = default;
+  RGWGetObjTags(): has_tags(false) {}
   ~RGWGetObjTags() = default;
   int verify_permission();
   void execute();
