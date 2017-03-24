@@ -33,7 +33,8 @@ int RGWObjTags::set_from_string(const string& input){
   int ret=0;
   for (const auto& kv: split(url_decoded_input, '&')){
     auto p = kv.find_first_of("=");
-    if (p+1 != string::npos){
+    if (p != string::npos) {
+      // p+1 will be size() in worst case, so this will not raise an exception
       ret = check_and_add_tag(kv.substr(0,p), kv.substr(p+1));
     } else {
       ret = check_and_add_tag(kv);
