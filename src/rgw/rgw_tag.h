@@ -28,7 +28,7 @@ class RGWObjTags
   }
 
   void dump(Formatter *f) const;
-  void add_tag(const std::string& key, const std::string& val="");
+  bool add_tag(const std::string& key, const std::string& val="");
   int check_and_add_tag(const std::string& key, const std::string& val="");
   size_t count() const {return tags.size();}
   int set_from_string(const std::string& input);

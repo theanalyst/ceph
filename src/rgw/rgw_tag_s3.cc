@@ -34,7 +34,9 @@ bool RGWObjTagSet_S3::xml_end(const char* el){
   while (tagentry) {
     const string& key = tagentry->get_key();
     const string& val = tagentry->get_val();
-    add_tag(key,val);
+    if (!add_tag(key,val))
+      return false;
+
     tagentry = static_cast<RGWObjTagEntry_S3 *>(iter.get_next());
   }
   return true;

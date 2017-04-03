@@ -10,8 +10,8 @@ static constexpr uint32_t MAX_OBJ_TAGS=10;
 static constexpr uint32_t MAX_TAG_KEY_SIZE=128;
 static constexpr uint32_t MAX_TAG_VAL_SIZE=256;
 
-void RGWObjTags::add_tag(const string&key, const string& val){
-  tags[key] = val;
+bool RGWObjTags::add_tag(const string&key, const string& val){
+  return tags.emplace(std::make_pair(key,val)).second;
 }
 
 int RGWObjTags::check_and_add_tag(const string&key, const string& val){
