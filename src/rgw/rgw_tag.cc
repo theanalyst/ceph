@@ -3,6 +3,7 @@
 #include <string>
 
 #include <common/errno.h>
+#include <boost/algorithm/string.hpp>
 
 #include "rgw_tag.h"
 
@@ -15,30 +16,38 @@ bool RGWObjTags::add_tag(const string&key, const string& val){
 }
 
 int RGWObjTags::check_and_add_tag(const string&key, const string& val){
-  if (tags.size() == MAX_OBJ_TAGS || key.size() > MAX_TAG_KEY_SIZE || val.size() > MAX_TAG_VAL_SIZE){
-    // amz doesn't seem to support a modify op, so we don't have to check for
-    // the key existence
+  if (tags.size() == MAX_OBJ_TAGS ||
+      key.size() > MAX_TAG_KEY_SIZE ||
+      val.size() > MAX_TAG_VAL_SIZE ||
+      key.size() == 0){
     return -ERR_INVALID_TAG;
   }
-  tags[key] = val;
+
+  // if we get a conflicting key, either the XML is malformed or the user
+  // supplied an invalid string
+  if (!add_tag(key,val))
+    return -EINVAL;
+
   return 0;
 }
 
 int RGWObjTags::set_from_string(const string& input){
-  string url_decoded_input;
-  bool decoded=url_decode(input, url_decoded_input);
-  if (!decoded)
-    return -EINVAL;
-
   int ret=0;
-  for (const auto& kv: split(url_decoded_input, '&')){
-    auto p = kv.find_first_of("=");
+  vector <string> kvs;
+  boost::split(kvs, input, boost::is_any_of("&"));
+  for (const auto& kv: kvs){
+    auto p = kv.find("=");
+    string key,val;
     if (p != string::npos) {
-      // p+1 will be size() in worst case, so this will not raise an exception
-      ret = check_and_add_tag(kv.substr(0,p), kv.substr(p+1));
+      // TODO: actually handle if url_decode errors
+      url_decode(kv.substr(0,p),key);
+      url_decode(kv.substr(p+1),val);
+      ret = check_and_add_tag(key,val);
     } else {
-      ret = check_and_add_tag(kv);
+      url_decode(kv,key);
+      ret = check_and_add_tag(key);
     }
+
     if (ret < 0)
       return ret;
   }
