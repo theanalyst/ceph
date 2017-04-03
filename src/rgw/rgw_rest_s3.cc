@@ -1277,6 +1277,10 @@ int RGWPutObj_ObjStore_S3::get_params()
     ret = obj_tags->set_from_string(tag_str);
     if (ret < 0){
       ldout(s->cct,0) << "setting obj tags failed with " << ret << dendl;
+      if (ret == -ERR_INVALID_TAG){
+        ret = -EINVAL; //s3 returns only -EINVAL for PUT requests
+      }
+
       return ret;
     }
   }
