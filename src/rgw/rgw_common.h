@@ -2156,7 +2156,6 @@ extern bool url_decode(const std::string& src_str,
 extern void url_encode(const std::string& src,
                        string& dst);
 extern std::string url_encode(const std::string& src);
-extern std::vector <std::string> split(const std::string &s, const char delim);
 /* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 extern void calc_hmac_sha1(const char *key, int key_len,
                           const char *msg, int msg_len, char *dest);

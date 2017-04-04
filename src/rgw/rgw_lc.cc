@@ -1,6 +1,7 @@
 #include <string.h>
 #include <iostream>
 #include <map>
+#include <boost/algorithm/string.hpp>
 
 #include "common/Formatter.h"
 #include <common/errno.h>
@@ -309,7 +310,7 @@ int RGWLC::bucket_lc_process(string& shard_id)
   vector<rgw_bucket_dir_entry> objs;
   RGWObjectCtx obj_ctx(store);
   vector<std::string> result;
-  result = split(shard_id, ':');
+  boost::split(result, shard_id, boost::is_any_of(":"));
   string bucket_tenant = result[0];
   string bucket_name = result[1];
   string bucket_id = result[2];
