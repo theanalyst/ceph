@@ -256,6 +256,7 @@ class RGWPostObj_ObjStore_S3 : public RGWPostObj_ObjStore {
   bool part_bl(const string& name, bufferlist *pbl);
 
   int get_policy();
+  int get_tags();
   void rebuild_key(string& key);
 public:
   RGWPostObj_ObjStore_S3() {}
