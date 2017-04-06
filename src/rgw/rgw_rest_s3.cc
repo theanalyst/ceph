@@ -360,6 +360,45 @@ void RGWGetObjTags_ObjStore_S3::send_response_data(bufferlist& bl)
   rgw_flush_formatter_and_reset(s, s->formatter);
 }
 
+
+int RGWPutObjTags_ObjStore_S3::get_params()
+{
+  RGWObjTagsXMLParser parser;
+
+  if (!parser.init()){
+    return -EINVAL;
+  }
+
+  char *data=nullptr;
+  int len=0;
+  constexpr int RGW_PUT_OBJ_TAGS_MAX_SIZE = 1*1024*1024;
+  int r = rgw_rest_read_all_input(s, &data, &len, RGW_PUT_OBJ_TAGS_MAX_SIZE);
+  if (r < 0)
+    return r;
+
+  auto data_deleter = std::unique_ptr<char, decltype(free)*>{data, free};
+
+  ldout(s->cct, 20) << "read len=" << len << " data=" << (data ? data : "") << dendl;
+
+  if (!parser.parse(data, len, 1)) {
+    return -ERR_MALFORMED_XML;
+  }
+
+  RGWObjTagSet_S3 *obj_tags;
+  RGWObjTagging_S3 *tagging;
+
+  tagging = static_cast<RGWObjTagging_S3 *>(parser.find_first("Tagging"));
+  obj_tags = static_cast<RGWObjTagSet_S3 *>(tagging->find_first("TagSet"));
+  if(!obj_tags){
+    return -ERR_MALFORMED_XML;
+  }
+
+  obj_tags->encode(tags_bl);
+  ldout(s->cct, 20) << "Read " << obj_tags->count() << "tags" << dendl;
+
+  return 0;
+}
+
 void RGWPutObjTags_ObjStore_S3::send_response()
 {
   if (op_ret)

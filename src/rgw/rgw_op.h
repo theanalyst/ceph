@@ -335,11 +335,8 @@ class RGWGetObjTags : public RGWOp {
 
 class RGWPutObjTags : public RGWOp {
  protected:
-  size_t len;
-  char *data;
+  bufferlist tags_bl;
  public:
- RGWPutObjTags(): len(0), data(nullptr) {}
-  virtual ~RGWPutObjTags() {free(data);}
   int verify_permission();
   void execute();
 

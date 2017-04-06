@@ -65,8 +65,8 @@ public:
   RGWPutObjTags_ObjStore_S3() {}
   ~RGWPutObjTags_ObjStore_S3() {}
 
+  int get_params() override;
   void send_response() override;
-  // void execute () override {};
 };
 
 

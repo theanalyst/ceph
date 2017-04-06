@@ -171,7 +171,6 @@ class RGWPutObjTags_ObjStore: public RGWPutObjTags {
 public:
   RGWPutObjTags_ObjStore() {};
   ~RGWPutObjTags_ObjStore() {};
-  int get_params();
 };
 
 class RGWListBuckets_ObjStore : public RGWListBuckets {

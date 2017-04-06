@@ -614,36 +614,15 @@ int RGWPutObjTags::verify_permission()
 
 void RGWPutObjTags::execute()
 {
-  RGWObjTagSet_S3 *obj_tags;
-  RGWObjTagging_S3 *tagging;
-  RGWObjTagsXMLParser parser;
-  rgw_obj obj;
-  bufferlist tags_bl;
-  if (!parser.init()){
-    op_ret = -EINVAL;
-    return;
-  }
 
   op_ret = get_params();
-
-  ldout(s->cct, 15) << "read len=" << len << " data=" << (data ? data : "") << dendl;
-
-  if (!parser.parse(data, len, 1)) {
-    op_ret = -ERR_MALFORMED_XML;
+  if (op_ret < 0)
     return;
-  }
-  tagging = static_cast<RGWObjTagging_S3 *>(parser.find_first("Tagging"));
-  obj_tags = static_cast<RGWObjTagSet_S3 *>(tagging->find_first("TagSet"));
-  if(!obj_tags){
-    op_ret = -ERR_MALFORMED_XML;
-    return;
-  }
 
-  obj_tags->encode(tags_bl);
+  rgw_obj obj;
   obj = rgw_obj(s->bucket, s->object.name);
   obj.set_instance(s->object.instance);
 
-  ldout(s->cct, 20) << "adding " << obj_tags->count() << "tags" << dendl;
   map <string, bufferlist> attrs;
 
   store->set_atomic(s->obj_ctx, obj);
