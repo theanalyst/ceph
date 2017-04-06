@@ -1266,31 +1266,6 @@ int RGWPutLC_ObjStore::get_params()
   return op_ret;
 }
 
-int RGWPutObjTags_ObjStore::get_params()
-{
-  size_t cl = 0;
-  if (s->length)
-    cl = atoll(s->length);
-  if (cl) {
-    data = (char *)malloc(cl + 1);
-    if (!data) {
-      op_ret = -ENOMEM;
-      return op_ret;
-    }
-    const auto read_len = recv_body(s, data, cl);
-    if (read_len < 0) {
-      return read_len;
-    } else {
-      len = read_len;
-    }
-    data[len] = '\0';
-  } else {
-    len = 0;
-  }
-
-  return op_ret;
-}
-
 static int read_all_chunked_input(req_state *s, char **pdata, int *plen, const uint64_t max_read)
 {
 #define READ_CHUNK 4096
