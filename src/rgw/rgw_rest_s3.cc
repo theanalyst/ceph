@@ -384,8 +384,10 @@ int RGWPutObjTags_ObjStore_S3::get_params()
 
   char *data=nullptr;
   int len=0;
-  constexpr int RGW_PUT_OBJ_TAGS_MAX_SIZE = 1*1024*1024;
-  int r = rgw_rest_read_all_input(s, &data, &len, RGW_PUT_OBJ_TAGS_MAX_SIZE);
+
+  const auto max_size = s->cct->_conf->rgw_max_put_param_size;
+  int r = rgw_rest_read_all_input(s, &data, &len, max_size, false);
+
   if (r < 0)
     return r;
 
