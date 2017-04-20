@@ -62,9 +62,7 @@ void RGWObjTagSet_S3::dump_xml(Formatter *f){
   for (const auto& tag: tags){
     f->open_object_section("Tag");
     f->dump_string("Key", tag.first);
-    if (!tag.second.empty()){
-      f->dump_string("Value",tag.second);
-    }
+    f->dump_string("Value", tag.second);
     f->close_section();
   }
 }
