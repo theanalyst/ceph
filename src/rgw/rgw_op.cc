@@ -633,6 +633,35 @@ void RGWPutObjTags::execute()
   }
 }
 
+void RGWDeleteObjTags::pre_exec(){
+  rgw_bucket_object_pre_exec(s);
+}
+
+
+int RGWDeleteObjTags::verify_permission(){
+
+  if (!s->object.empty()){
+    if(!verify_object_permission(s, RGW_PERM_WRITE)) {
+      ldout(s->cct,0) << "abhi, we dont have write perm" << dendl;
+      return -EACCES;
+    }
+  }
+  return 0;
+}
+
+void RGWDeleteObjTags::execute() {
+  if (!s->object.empty()){
+    rgw_obj obj;
+    obj = rgw_obj(s->bucket, s->object);
+    store->set_atomic(s->obj_ctx, obj);
+    map <string, bufferlist> attrs;
+    map <string, bufferlist> rmattr;
+    bufferlist bl;
+    rmattr[RGW_ATTR_TAGS] = bl;
+    op_ret = store->set_attrs(s->obj_ctx, s->bucket_info, obj, attrs, &rmattr);
+  }
+}
+
 int RGWOp::do_aws4_auth_completion()
 {
   int ret;

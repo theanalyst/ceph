@@ -69,7 +69,12 @@ public:
   void send_response() override;
 };
 
-
+class RGWDeleteObjTags_ObjStore_S3 : public RGWDeleteObjTags
+{
+public:
+  ~RGWDeleteObjTags_ObjStore_S3() override {}
+  void send_response() override;
+};
 
 class RGWListBuckets_ObjStore_S3 : public RGWListBuckets_ObjStore {
 public:

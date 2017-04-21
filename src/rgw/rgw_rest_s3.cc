@@ -427,6 +427,19 @@ void RGWPutObjTags_ObjStore_S3::send_response()
 
 }
 
+void RGWDeleteObjTags_ObjStore_S3::send_response()
+{
+  int r = op_ret;
+  if (r == -ENOENT)
+    r = 0;
+  if (!r)
+    r = STATUS_NO_CONTENT;
+
+  set_req_state_err(s, r);
+  dump_errno(s);
+  end_header(s, this);
+}
+
 void RGWListBuckets_ObjStore_S3::send_response_begin(bool has_buckets)
 {
   if (op_ret)
@@ -3344,6 +3357,9 @@ RGWOp *RGWHandler_REST_Obj_S3::op_put()
 
 RGWOp *RGWHandler_REST_Obj_S3::op_delete()
 {
+  if (is_tagging_op()) {
+    return new RGWDeleteObjTags_ObjStore_S3;
+  }
   string upload_id = s->info.args.get("uploadId");
 
   if (upload_id.empty())

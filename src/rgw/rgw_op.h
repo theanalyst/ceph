@@ -348,6 +348,17 @@ class RGWPutObjTags : public RGWOp {
   virtual uint32_t op_mask() { return RGW_OP_TYPE_WRITE; }
 };
 
+class RGWDeleteObjTags: public RGWOp {
+ public:
+  void pre_exec();
+  int verify_permission();
+  void execute();
+
+  virtual void send_response() = 0;
+  virtual const string name() { return "delete_obj_tags"; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_DELETE; }
+};
+
 class RGWBulkDelete : public RGWOp {
 public:
   struct acct_path_t {
