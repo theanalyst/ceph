@@ -35,6 +35,7 @@
 #include "rgw_client_io.h"
 #include "rgw_compression.h"
 #include "rgw_role.h"
+#include "rgw_tag_s3.h"
 #include "cls/lock/cls_lock_client.h"
 #include "cls/rgw/cls_rgw_client.h"
 
@@ -571,6 +572,89 @@ int RGWOp::verify_op_mask()
   }
 
   return 0;
+}
+
+int RGWGetObjTags::verify_permission()
+{
+  if (!verify_object_permission(s, RGW_PERM_READ))
+    return -EACCES;
+
+  return 0;
+}
+
+void RGWGetObjTags::pre_exec(){
+  rgw_bucket_object_pre_exec(s);
+}
+
+void RGWGetObjTags::execute()
+{
+  rgw_obj obj;
+  map<string,bufferlist> attrs;
+
+  obj = rgw_obj(s->bucket, s->object.name);
+  obj.set_instance(s->object.instance);
+
+  store->set_atomic(s->obj_ctx, obj);
+
+  op_ret = get_obj_attrs(store, s, obj, attrs);
+  auto tags = attrs.find(RGW_ATTR_TAGS);
+  if(tags == attrs.end())
+    return;
+  tags_bl.append(tags->second);
+  send_response_data(tags_bl);
+}
+
+int RGWPutObjTags::verify_permission()
+{
+  if (!verify_object_permission(s, RGW_PERM_WRITE)) {
+    return -EACCES;
+  }
+  return 0;
+}
+
+void RGWPutObjTags::execute()
+{
+  RGWObjTagSet_S3 *obj_tags;
+  RGWObjTagging_S3 *tagging;
+  RGWObjTagsXMLParser parser;
+  rgw_obj obj;
+  bufferlist tags_bl;
+  if (!parser.init()){
+    op_ret = -EINVAL;
+    return;
+  }
+
+  op_ret = get_params();
+
+  ldout(s->cct, 15) << "read len=" << len << " data=" << (data ? data : "") << dendl;
+
+  if (!parser.parse(data, len, 1)) {
+    op_ret = -ERR_MALFORMED_XML;
+    return;
+  }
+  tagging = static_cast<RGWObjTagging_S3 *>(parser.find_first("Tagging"));
+  obj_tags = static_cast<RGWObjTagSet_S3 *>(tagging->find_first("TagSet"));
+  if(!obj_tags){
+    op_ret = -ERR_MALFORMED_XML;
+    return;
+  }
+
+  obj_tags->encode(tags_bl);
+  obj = rgw_obj(s->bucket, s->object.name);
+  obj.set_instance(s->object.instance);
+
+  ldout(s->cct, 20) << "adding " << obj_tags->count() << "tags" << dendl;
+  map <string, bufferlist> attrs;
+
+  store->set_atomic(s->obj_ctx, obj);
+
+  op_ret = get_obj_attrs(store, s, obj, attrs);
+  if (op_ret < 0)
+    return;
+
+  attrs[RGW_ATTR_TAGS] = tags_bl;
+  op_ret = store->set_attrs(s->obj_ctx, obj, attrs, NULL);
+  // handle ECANCELD
 }
 
 int RGWOp::do_aws4_auth_completion()

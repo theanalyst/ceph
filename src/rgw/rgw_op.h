@@ -318,6 +318,37 @@ public:
   }
 };
 
+class RGWGetObjTags : public RGWOp {
+ protected:
+  bufferlist tags_bl;
+ public:
+  RGWGetObjTags() {}
+  ~RGWGetObjTags() {}
+  int verify_permission();
+  void execute();
+  void pre_exec();
+
+  virtual void send_response_data(bufferlist& bl) = 0;
+  virtual const string name() { return "get_obj_tags"; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+};
+
+class RGWPutObjTags : public RGWOp {
+ protected:
+  size_t len;
+  char *data;
+ public:
+ RGWPutObjTags(): len(0), data(nullptr) {}
+  virtual ~RGWPutObjTags() {free(data);}
+  int verify_permission();
+  void execute();
+
+  virtual void send_response() = 0;
+  virtual int get_params() = 0;
+  virtual const string name() { return "put_obj_tags"; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_WRITE; }
+};
+
 class RGWBulkDelete : public RGWOp {
 public:
   struct acct_path_t {
