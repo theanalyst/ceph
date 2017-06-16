@@ -1,8 +1,9 @@
 tasks:
 - s3tests:
     client.0:
-      force-branch: ceph-master
+      force-branch: wip-tagging
       rgw_server: client.0
+      git_remote: git://github.com/theanalyst/
 overrides:
   ceph:
     conf:
