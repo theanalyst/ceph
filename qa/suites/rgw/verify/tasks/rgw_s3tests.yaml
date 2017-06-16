@@ -8,7 +8,7 @@ tasks:
       valgrind: [--tool=memcheck]
 - s3tests:
     client.0:
-      force-branch: wip-tagging
+      force-branch: wip-version-fix
       rgw_server: client.0
       git_remote: git://github.com/theanalyst/
 overrides:
