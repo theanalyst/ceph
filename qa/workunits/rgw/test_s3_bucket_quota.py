@@ -39,11 +39,44 @@ def rgw_ctx():
     ctx.teardown()
     ctr += 1
 
+
+def test_quota_set_max_size_zero(rgw_ctx):
+    rgw_conn = rgw_ctx.conn
+    rgw_admin = rgw_ctx.rgw_admin
+    bucket = rgw_conn.bucket.name
+
+    mysize = 2*1024**2
+
+    ret = rgw_admin.bucket_quota_enable(bucket)
+    assert ret.exit_code == 0
+    ret = rgw_admin.bucket_quota_set_max_objs(bucket, 0)
+    assert ret.exit_code == 0
+
+    with pytest.raises(S3ResponseError) as exc:
+        rgw_conn.upload_key('key1', mysize)
+
+def test_quota_set_max_objs_zero(rgw_ctx):
+    rgw_conn = rgw_ctx.conn
+    rgw_admin = rgw_ctx.rgw_admin
+    bucket = rgw_conn.bucket.name
+
+    mysize = 2*1024**2
+
+    ret = rgw_admin.bucket_quota_enable(bucket)
+    assert ret.exit_code == 0
+    ret = rgw_admin.bucket_quota_set_size(bucket, 0)
+    assert ret.exit_code == 0
+
+    with pytest.raises(S3ResponseError) as exc:
+        rgw_conn.upload_key('key1', mysize)
+
+
+
 def test_quota_size(rgw_ctx):
     rgw_conn = rgw_ctx.conn
     rgw_admin = rgw_ctx.rgw_admin
     bucket = rgw_conn.bucket.name
-    mysize = 2*100*1024**2
+    mysize = 200*1024**2
     with does_not_raise(S3ResponseError, 'upload object failed'):
         rgw_conn.upload_key('key1', mysize)
 
@@ -56,3 +89,19 @@ def test_quota_size(rgw_ctx):
 
     with does_not_raise(S3ResponseError, 'set max size and ensure that objects beyond max size is allowed failed'):
         rgw_conn.upload_key('key2',quota_size)
+
+
+def test_quota_disabled(rgw_ctx):
+    rgw_conn = rgw_ctx.conn
+    rgw_admin = rgw_ctx.rgw_admin
+    bucket = rgw_conn.bucket.name
+    mysize = 2*1024**2
+    quota_size= 100*1024**2
+    # sh also raises an exception, move this to ctx mgr later
+    ret = rgw_admin.bucket_quota_set_size(bucket, quota_size)
+    assert ret.exit_code == 0
+    ret = rgw_admin.bucket_quota_disable(bucket)
+    assert ret.exit_code == 0
+
+    with does_not_raise(S3ResponseError, 'bucket quota size doesnt take effect when quota is disabled'):
+        rgw_conn.upload_key('key2',2*quota_size)

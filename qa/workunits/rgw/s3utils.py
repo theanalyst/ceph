@@ -53,22 +53,69 @@ class RGWConn(object):
             ret = k.set_contents_from_file(f,rewind=True)
         return ret
 
-    def _upload_part(self, mp, size, part_num):
+    def _upload_part(self, mp, size, thread_q):
         with tempfile.TemporaryFile() as f:
+            try:
+                part_num = thread_q.get()
+            except gevent.queue.queue.empty:
+                return
             print 'doing stuff'
             f.seek(size - 1)
             f.write(b'0')
             f.seek(0)
             mp.upload_part_from_file(f, part_num)
+            thread_q.task_done()
 
-    def multipart_upload_key(self, key_name, size, chunksize=50*1024*1024):
+    def multipart_upload_key(self, key_name, size, chunksize=10*1024*1024):
         chunkcount = size/chunksize
         last_chunk = size%chunksize
         mp = self.bucket.initiate_multipart_upload(key_name)
-        pool = Pool(processes=8)
-        [pool.apply_async(partial(self._upload_part, mp, chunksize),i) for i in range(1,chunkcount)]
+        #pool = Pool(processes=8)
+
+        # for i in range(1,chunkcount):
+        #     pool.apply_async(self._upload_part, [mp, chunksize, i])
+        # #[pool.apply_async(partial(self._upload_part, mp, chunksize),i) for i in range(1,chunkcount)]
+
+        # pool.close()
+        # pool.join()
+        #import gevent
+        import gevent
+        import gevent.queue
+        from Queue import Queue
+        from threading import Thread
+        num_threads = min(50, chunkcount) # Lets not get overly ambitious here
+
+        q = gevent.queue.JoinableQueue()
+
+        q = Queue(maxsize=num_threads)
+
+        for i in range(num_threads):
+            t = gevent.Greenlet.spawn(self._upload_part, mp, chunksize, q)
+            #t = Thread(target=self._upload_part, args=(mp,chunksize, q))
+            t.start()
+
         for i in range(1,chunkcount):
-            self._upload_part(mp, chunksize, i)
+            q.put(i)
+
+        q.put(StopIteration)
+        q.join()
+        # threads = {}
+        # for i in range(1,chunkcount):
+        #     threads[i] = threading.Thread(target = self._upload_part, args=(mp, chunksize,i))
+        #     threads[i].start()
+
+        # for i in range(1,chunkcount):
+        #     threads[i].join()
+        # threads = {}
+        # for i in range(1,chunkcount):
+        #     threads[i] = gevent.Greenlet.spawn(self._upload_part, mp, chunksize, i)
+        #     threads[i].start()
+
+        # for i in range(1,chunkcount):
+        #     threads[1].join()
+
+        # for i in range(1,chunkcount):
+        #     self._upload_part(mp, chunksize, i)
         # pool.imap(partial(self._upload_part, mp, chunksize), range(1,chunkcount))
         if last_chunk != 0:
             self._upload_part(mp, last_chunk, chunkcount+1)
@@ -104,6 +151,19 @@ class RGWAdmin(object):
         return self.rgw_admin('quota','set',
                               '--bucket', bucket_name,
                               '--max-size', size)
+
+    def bucket_quota_set_max_objs(self, bucket_name, objs):
+        return self.rgw_admin('quota','set',
+                              '--bucket', bucket_name,
+                              '--max-objects', objs)
+
+    def bucket_quota_disable(self, bucket_name):
+        return self.rgw_admin('quota','disable',
+                              '--bucket', bucket_name)
+
+    def bucket_quota_enable(self, bucket_name):
+        return self.rgw_admin('quota','enable',
+                              '--bucket', bucket_name)
 
 # for the lack of a better name
 class RGWCtx(object):
