@@ -126,6 +126,10 @@ int rgw_mount(librgw_t rgw, const char *uid, const char *key,
 	      const char *secret, struct rgw_fs **rgw_fs,
 	      uint32_t flags);
 
+int rgw_mount2(librgw_t rgw, const char *uid, const char *key,
+               const char *secret, const char *root, struct rgw_fs **rgw_fs,
+               uint32_t flags);
+
 /*
  register invalidate callbacks
 */
