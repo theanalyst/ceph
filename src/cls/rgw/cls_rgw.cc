@@ -3080,6 +3080,19 @@ int rgw_user_usage_log_trim(cls_method_context_t hctx, bufferlist *in, bufferlis
   return 0;
 }
 
+
+int rgw_usage_log_clear(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+{
+  CLS_LOG(10, "%s", __func__);
+
+  /* only continue if object exists! */
+  int ret = cls_cxx_stat(hctx, NULL, NULL);
+  if (ret < 0)
+    return ret;
+
+  return cls_cxx_map_clear(hctx);
+}
+
 /*
  * We hold the garbage collection chain data under two different indexes: the first 'name' index
  * keeps them under a unique tag that represents the chains, and a second 'time' index keeps
@@ -3820,6 +3833,7 @@ CLS_INIT(rgw)
   cls_method_handle_t h_rgw_user_usage_log_add;
   cls_method_handle_t h_rgw_user_usage_log_read;
   cls_method_handle_t h_rgw_user_usage_log_trim;
+  cls_method_handle_t h_rgw_usage_log_clear;
   cls_method_handle_t h_rgw_gc_set_entry;
   cls_method_handle_t h_rgw_gc_list;
   cls_method_handle_t h_rgw_gc_remove;
@@ -3876,6 +3890,7 @@ CLS_INIT(rgw)
   cls_register_cxx_method(h_class, RGW_USER_USAGE_LOG_ADD, CLS_METHOD_RD | CLS_METHOD_WR, rgw_user_usage_log_add, &h_rgw_user_usage_log_add);
   cls_register_cxx_method(h_class, RGW_USER_USAGE_LOG_READ, CLS_METHOD_RD, rgw_user_usage_log_read, &h_rgw_user_usage_log_read);
   cls_register_cxx_method(h_class, RGW_USER_USAGE_LOG_TRIM, CLS_METHOD_RD | CLS_METHOD_WR, rgw_user_usage_log_trim, &h_rgw_user_usage_log_trim);
+  cls_register_cxx_method(h_class, RGW_USAGE_LOG_CLEAR, CLS_METHOD_RD| CLS_METHOD_WR, rgw_usage_log_clear, &h_rgw_usage_log_clear);
 
   /* garbage collection */
   cls_register_cxx_method(h_class, RGW_GC_SET_ENTRY, CLS_METHOD_RD | CLS_METHOD_WR, rgw_cls_gc_set_entry, &h_rgw_gc_set_entry);

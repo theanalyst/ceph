@@ -507,6 +507,8 @@ int cls_rgw_usage_log_trim(librados::IoCtx& io_ctx, const string& oid, string& u
                            uint64_t start_epoch, uint64_t end_epoch);
 
 void cls_rgw_usage_log_add(librados::ObjectWriteOperation& op, rgw_usage_log_info& info);
+void cls_rgw_usage_log_clear(librados::ObjectWriteOperation& op);
+
 
 /* garbage collection */
 void cls_rgw_gc_set_entry(librados::ObjectWriteOperation& op, uint32_t expiration_secs, cls_rgw_gc_obj_info& info);
