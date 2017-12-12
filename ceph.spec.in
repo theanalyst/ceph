@@ -74,7 +74,8 @@ Release:	@RPM_RELEASE@%{?dist}
 Epoch:		2
 %endif
 
-# define %_epoch_prefix macro which will expand to the empty string if %epoch is undefined
+# define _epoch_prefix macro which will expand to the empty string if epoch is
+# undefined
 %global _epoch_prefix %{?epoch:%{epoch}:}
 
 Summary:	User space components of the Ceph file system
@@ -1463,6 +1464,7 @@ fi
 %{_udevrulesdir}/95-ceph-osd.rules
 %{_mandir}/man8/ceph-clsinfo.8*
 %{_mandir}/man8/ceph-osd.8*
+%{_mandir}/man8/ceph-bluestore-tool.8*
 %if 0%{?rhel} && ! 0%{?centos}
 %attr(0755,-,-) %{_sysconfdir}/cron.hourly/subman
 %endif
