@@ -344,6 +344,7 @@ private:
 				const string &erasure_code_profile,
 				unsigned *stripe_width,
 				ostream *ss);
+  int check_pg_num(int64_t pool, int pg_num, int size, ostream* ss);
   int prepare_new_pool(string& name, uint64_t auid,
 		       int crush_rule,
 		       const string &crush_rule_name,
@@ -355,7 +356,8 @@ private:
 		       ostream *ss);
   int prepare_new_pool(MonOpRequestRef op);
 
-  void update_pool_flags(int64_t pool_id, uint64_t flags);
+  void set_pool_flags(int64_t pool_id, uint64_t flags);
+  void clear_pool_flags(int64_t pool_id, uint64_t flags);
   bool update_pools_status();
 
   bool prepare_set_flag(MonOpRequestRef op, int flag);
