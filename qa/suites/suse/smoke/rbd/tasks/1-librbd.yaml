@@ -1,0 +1,9 @@
+overrides:
+  deepsea:
+    exec:
+    - suites/ceph-test/librbd.sh
+tasks:
+# the "exec" task runs commands as root
+- exec:
+    client.0:
+      - "ceph_test_librbd"
