@@ -90,12 +90,24 @@ else
 	rpm_release=0
 fi
 
+. /etc/os-release
+case $ID in
+    opensuse|suse|sles)
+        if [ "x$rpm_release" != "x0" ] ; then
+            rpm_release=$(echo $rpm_release | sed 's/.g/+g/')
+            rpm_version="${rpm_version}.${rpm_release}"
+            rpm_release="0"
+        fi
+        ;;
+esac
+
 for spec in ceph.spec.in alpine/APKBUILD.in; do
     cat $spec |
         sed "s/@VERSION@/$rpm_version/g" |
         sed "s/@RPM_RELEASE@/$rpm_release/g" |
         sed "s/@TARBALL_BASENAME@/ceph-$version/g" > `echo $spec | sed 's/.in$//'`
 done
+
 ln -s . $outfile
 tar cvf $outfile.version.tar $outfile/src/.git_version $outfile/ceph.spec $outfile/alpine/APKBUILD
 # NOTE: If you change this version number make sure the package is available
