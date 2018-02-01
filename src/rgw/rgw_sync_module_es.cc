@@ -183,33 +183,33 @@ struct es_index_mappings {
     f->open_object_section(section);
     ::encode_json("type", "nested", f);
     f->open_object_section("properties");
-    encode_json("name", es_dump_type("string"), f);
+    encode_json("name", es_dump_type("text"), f);
     encode_json("value", es_dump_type(type, format), f);
     f->close_section(); // entry
-    f->close_section(); // custom-string
+    f->close_section(); // custom-text
   }
   void dump(Formatter *f) const {
     f->open_object_section("object");
     f->open_object_section("properties");
-    encode_json("bucket", es_dump_type("string"), f);
-    encode_json("name", es_dump_type("string"), f);
-    encode_json("instance", es_dump_type("string"), f);
+    encode_json("bucket", es_dump_type("text"), f);
+    encode_json("name", es_dump_type("text"), f);
+    encode_json("instance", es_dump_type("text"), f);
     encode_json("versioned_epoch", es_dump_type("long"), f);
     f->open_object_section("meta");
     f->open_object_section("properties");
-    encode_json("cache_control", es_dump_type("string"), f);
-    encode_json("content_disposition", es_dump_type("string"), f);
-    encode_json("content_encoding", es_dump_type("string"), f);
-    encode_json("content_language", es_dump_type("string"), f);
-    encode_json("content_type", es_dump_type("string"), f);
-    encode_json("etag", es_dump_type("string"), f);
-    encode_json("expires", es_dump_type("string"), f);
+    encode_json("cache_control", es_dump_type("text"), f);
+    encode_json("content_disposition", es_dump_type("text"), f);
+    encode_json("content_encoding", es_dump_type("text"), f);
+    encode_json("content_language", es_dump_type("text"), f);
+    encode_json("content_type", es_dump_type("text"), f);
+    encode_json("etag", es_dump_type("text"), f);
+    encode_json("expires", es_dump_type("text"), f);
     f->open_object_section("mtime");
     ::encode_json("type", "date", f);
     ::encode_json("format", "strict_date_optional_time||epoch_millis", f);
     f->close_section(); // mtime
     encode_json("size", es_dump_type("long"), f);
-    dump_custom(f, "custom-string", "string", nullptr);
+    dump_custom(f, "custom-text", "text", nullptr);
     dump_custom(f, "custom-int", "long", nullptr);
     dump_custom(f, "custom-date", "date", "strict_date_optional_time||epoch_millis");
     f->close_section(); // properties

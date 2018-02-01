@@ -94,8 +94,10 @@ public:
   }
 
   int send_request() override {
+    auto pp = std::make_pair("content-type", "application/json");
+    param_vec_t hdrs = {pp};
     auto op = boost::intrusive_ptr<RGWRESTSendResource>(
-        new RGWRESTSendResource(conn, method, path, params, NULL, http_manager));
+        new RGWRESTSendResource(conn, method, path, params, &hdrs, http_manager));
 
     op->set_user_info((void *)stack);
 
