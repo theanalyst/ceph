@@ -172,7 +172,7 @@ if (WITH_RADOSGW_BEAST_FRONTEND)
 endif (WITH_RADOSGW_BEAST_FRONTEND)
 
 if (WITH_RADOSGW_OPENSSL)
-  list(APPEND radosgw_src
+  list(APPEND radosgw_srcs
     rgw_http_client_ssl.cc)
 endif (WITH_RADOSGW_OPENSSL)
 
