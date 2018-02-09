@@ -171,6 +171,11 @@ if (WITH_RADOSGW_BEAST_FRONTEND)
     rgw_asio_frontend.cc)
 endif (WITH_RADOSGW_BEAST_FRONTEND)
 
+if (WITH_RADOSGW_OPENSSL)
+  list(APPEND radosgw_src
+    rgw_http_client_ssl.cc)
+endif (WITH_RADOSGW_OPENSSL)
+
 add_library(radosgw_a STATIC ${radosgw_srcs}
   $<TARGET_OBJECTS:civetweb_common_objs>)
 target_link_libraries(radosgw_a rgw_a ${SSL_LIBRARIES})
@@ -188,6 +193,10 @@ add_dependencies(radosgw cls_rgw cls_lock cls_refcount
   cls_log cls_statelog cls_timeindex
   cls_version cls_replica_log cls_user)
 install(TARGETS radosgw DESTINATION bin)
+
+if (WITH_RADOSGW_OPENSSL)
+  target_link_libraries(radosgw ${OPENSSL_LIBRARIES})
+endif (WITH_RADOSGW_OPENSSL)
 
 set(radosgw_admin_srcs
   rgw_admin.cc
@@ -253,6 +262,7 @@ target_link_libraries(rgw PRIVATE
 set_target_properties(rgw PROPERTIES OUTPUT_NAME rgw VERSION 2.0.0
   SOVERSION 2)
 install(TARGETS rgw DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
 
 if(WITH_EMBEDDED)
   include(MergeStaticLibraries)

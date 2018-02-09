@@ -399,6 +399,7 @@ endif(WITH_RADOSGW)
 if (WITH_RADOSGW)
   find_package(OpenSSL)
   if (OPENSSL_FOUND)
+    set(WITH_RADOSGW_OPENSSL ON)
     execute_process(
       COMMAND
 	"sh" "-c"
@@ -431,6 +432,7 @@ if (WITH_RADOSGW)
     message(STATUS "crypto soname: ${LIBCRYPTO_SONAME}")
   else()
     message(WARNING "ssl not found: rgw civetweb may fail to dlopen libssl libcrypto")
+    message(WARNING "ssl not found: rgw cannot make ssl requests to external systems reliably")
   endif()
 endif (WITH_RADOSGW)
 

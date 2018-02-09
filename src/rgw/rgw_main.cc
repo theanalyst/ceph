@@ -44,6 +44,11 @@ extern "C" {
 #include "rgw_asio_frontend.h"
 #endif /* WITH_RADOSGW_BEAST_FRONTEND */
 
+#if defined(WITH_RADOSGW_OPENSSL)
+#include "rgw_http_client_ssl.h"
+#include <openssl/crypto.h>
+#endif /* WITH_RADOSGW_OPENSSL */
+
 #ifdef HAVE_SYS_PRCTL_H
 #include <sys/prctl.h>
 #endif
@@ -294,7 +299,11 @@ int main(int argc, const char **argv)
   }
 
   rgw_init_resolver();
-  
+
+#if defined(WITH_RADOSGW_OPENSSL)
+  CRYPTO_set_id_callback((unsigned long (*) ()) rgw_ssl_thread_id_callback);
+  CRYPTO_set_locking_callback(rgw_ssl_locking_callback);
+#endif
   curl_global_init(CURL_GLOBAL_ALL);
   
 #if defined(WITH_RADOSGW_FCGI_FRONTEND)
