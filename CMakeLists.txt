@@ -379,7 +379,22 @@ if (WITH_RADOSGW)
     message(STATUS "Looking for openssl anyways, because radosgw selected")
     find_package(OpenSSL)
   endif()
+# https://curl.haxx.se/docs/install.html mentions the
+# configure flags for various ssl backends
+  execute_process(
+    COMMAND
+  "sh" "-c"
+  "curl-config --configure | grep with-ssl"
+  RESULT_VARIABLE NO_CURL_SSL_LINK
+  ERROR_VARIABLE CURL_CONFIG_ERRORS
+  )
+  if (CURL_CONFIG_ERRORS)
+    message(WARNING "unable to run curl-config; rgw cannot make ssl requests to external systems reliably")
+  endif()
   if (OPENSSL_FOUND)
+    if (NOT NO_CURL_SSL_LINK)
+      set(WITH_CURL_OPENSSL ON)
+    endif() # CURL_SSL_LINK
     execute_process(
       COMMAND
 	"sh" "-c"
@@ -412,7 +427,7 @@ if (WITH_RADOSGW)
     message(STATUS "crypto soname: ${LIBCRYPTO_SONAME}")
   else()
     message(WARNING "ssl not found: rgw civetweb may fail to dlopen libssl libcrypto")
-  endif()
+  endif()  # OPENSSL_FOUND
 endif (WITH_RADOSGW)
 
 #option for CephFS
