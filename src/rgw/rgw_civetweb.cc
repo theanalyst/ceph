@@ -78,6 +78,12 @@ void RGWCivetWeb::init_env(CephContext *cct)
 
   for (int i = 0; i < info->num_headers; i++) {
     const struct mg_request_info::mg_header* header = &info->http_headers[i];
+
+    if (header->name == nullptr || header->value==nullptr) {
+      lderr(cct) << "client supplied malformatted headers" << dendl;
+      throw rgw::io::Exception(EIO, std::system_category());
+    }
+
     const boost::string_ref name(header->name);
 
     if (!header->value) {
