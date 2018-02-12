@@ -119,8 +119,15 @@ int process_request(RGWRados* const store,
                     int* http_ret)
 {
   int ret = 0;
-
-  client_io->init(g_ceph_context);
+  int cio_error = 0;
+  try {
+    client_io->init(g_ceph_context);
+  } catch (rgw::io::Exception& e) {
+    dout(0) << "===== ERROR initializing request " << e.what()
+	    << "=====" << dendl;
+    // the client probably tried to do something nasty. let's set up handlers and error once done
+    cio_error=-EINVAL;
+  }
 
   req->log_init();
 
@@ -144,16 +151,17 @@ int process_request(RGWRados* const store,
 
   req->log_format(s, "initializing for trans_id = %s", s->trans_id.c_str());
 
-  RGWOp* op = NULL;
+  RGWOp* op = nullptr;
   int init_error = 0;
   bool should_log = false;
   RGWRESTMgr *mgr;
   RGWHandler_REST *handler = rest->get_handler(store, s,
                                                auth_registry,
                                                frontend_prefix,
-                                               client_io, &mgr, &init_error);
-  if (init_error != 0) {
-    abort_early(s, NULL, init_error, NULL);
+					       client_io, &mgr, &init_error);
+
+  if (init_error != 0 || cio_error !=0) {
+    abort_early(s, nullptr, init_error ? init_error : cio_error , nullptr);
     goto done;
   }
   dout(10) << "handler=" << typeid(*handler).name() << dendl;
