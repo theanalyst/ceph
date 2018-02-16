@@ -20,7 +20,7 @@ ClientIO::ClientIO(tcp::socket& socket,
 
 ClientIO::~ClientIO() = default;
 
-void ClientIO::init_env(CephContext *cct)
+int ClientIO::init_env(CephContext *cct)
 {
   env.init(cct);
 

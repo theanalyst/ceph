@@ -120,14 +120,7 @@ int process_request(RGWRados* const store,
 {
   int ret = 0;
   int cio_error = 0;
-  try {
-    client_io->init(g_ceph_context);
-  } catch (rgw::io::Exception& e) {
-    dout(0) << "===== ERROR initializing request " << e.what()
-	    << "=====" << dendl;
-    // the client probably tried to do something nasty. let's set up handlers and error once done
-    cio_error=-EINVAL;
-  }
+  cio_error = client_io->init(g_ceph_context);
 
   req->log_init();
 
