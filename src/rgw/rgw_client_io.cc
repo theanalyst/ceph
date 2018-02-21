@@ -13,11 +13,8 @@
 namespace rgw {
 namespace io {
 
-int BasicClient::init(CephContext *cct) {
-  int init_error = init_env(cct);
-
-  if (init_error != 0)
-    return init_error;
+void BasicClient::init(CephContext *cct) {
+  init_env(cct);
 
   if (cct->_conf->subsys.should_gather(ceph_subsys_rgw, 20)) {
     const auto& env_map = get_env().get_map();
@@ -27,7 +24,6 @@ int BasicClient::init(CephContext *cct) {
       ldout(cct, 20) << iter.first << "=" << (x) << dendl;
     }
   }
-  return init_error;
 }
 
 } /* namespace io */

@@ -67,24 +67,17 @@ size_t RGWCivetWeb::complete_request()
   return 0;
 }
 
-int RGWCivetWeb::init_env(CephContext *cct)
+void RGWCivetWeb::init_env(CephContext *cct)
 {
   env.init(cct);
   const struct mg_request_info* info = mg_get_request_info(conn);
 
   if (! info) {
-    // request info is NULL; we have no info about the connection
-    return -EINVAL;
+    return;
   }
 
   for (int i = 0; i < info->num_headers; i++) {
     const struct mg_request_info::mg_header* header = &info->http_headers[i];
-
-    if (header->name == nullptr || header->value==nullptr) {
-      lderr(cct) << "client supplied malformatted headers" << dendl;
-      return -EINVAL;
-    }
-
     const boost::string_ref name(header->name);
     const auto& value = header->value;
 
@@ -135,7 +128,6 @@ int RGWCivetWeb::init_env(CephContext *cct)
   if (info->is_ssl) {
     env.set("SERVER_PORT_SECURE", port_buf);
   }
-  return 0;
 }
 
 size_t RGWCivetWeb::send_status(int status, const char *status_name)

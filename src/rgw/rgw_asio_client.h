@@ -73,8 +73,7 @@ class ClientIO : public io::RestfulClient,
 
   bool get_conn_close() const { return conn_close; }
 
-  int init_env(CephContext *cct) override;
-
+  void init_env(CephContext *cct) override;
   size_t complete_request() override;
   void flush() override;
   size_t send_status(int status, const char *status_name) override;

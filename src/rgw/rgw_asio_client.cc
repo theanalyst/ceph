@@ -24,7 +24,7 @@ ClientIO::ClientIO(tcp::socket& socket,
 
 ClientIO::~ClientIO() = default;
 
-int ClientIO::init_env(CephContext *cct)
+void ClientIO::init_env(CephContext *cct)
 {
   env.init(cct);
 
@@ -80,7 +80,6 @@ int ClientIO::init_env(CephContext *cct)
   env.set("SERVER_PORT", port_buf);
   // TODO: set SERVER_PORT_SECURE if using ssl
   // TODO: set REMOTE_USER if authenticated
-  return 0;
 }
 
 size_t ClientIO::write_data(const char* buf, size_t len)
