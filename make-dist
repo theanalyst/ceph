@@ -84,18 +84,17 @@ echo "including src/.git_version, ceph.spec"
 
 if expr index $version '-' > /dev/null; then
 	rpm_version=`echo $version | cut -d - -f 1-1`
-	rpm_release=`echo $version | cut -d - -f 2- | sed 's/-/./'`
+        rpm_sha1=`echo $version | cut -d - -f 3- | sed 's/g//'`
 else
 	rpm_version=$version
-	rpm_release=0
+	rpm_sha1=0
 fi
 
 . /etc/os-release
 case $ID in
     opensuse|suse|sles)
         if [ "x$rpm_release" != "x0" ] ; then
-            rpm_release=$(echo $rpm_release | sed 's/.g/+g/')
-            rpm_version="${rpm_version}.${rpm_release}"
+            rpm_version="${rpm_version}+git.$(date +%s).${rpm_sha1}"
             rpm_release="0"
         fi
         ;;
