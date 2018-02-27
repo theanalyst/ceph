@@ -180,6 +180,10 @@ if(WITH_RADOSGW_BEAST_FRONTEND)
     Boost::context)
 endif()
 
+if (WITH_CURL_OPENSSL)
+  target_link_libraries(radosgw_a ${OPENSSL_LIBRARIES})
+endif (WITH_CURL_OPENSSL)
+
 add_executable(radosgw rgw_main.cc)
 target_link_libraries(radosgw radosgw_a librados
   cls_rgw_client cls_lock_client cls_refcount_client
@@ -194,9 +198,6 @@ add_dependencies(radosgw cls_rgw cls_lock cls_refcount
   cls_version cls_replica_log cls_user)
 install(TARGETS radosgw DESTINATION bin)
 
-if (WITH_CURL_OPENSSL)
-  target_link_libraries(radosgw ${OPENSSL_LIBRARIES})
-endif (WITH_CURL_OPENSSL)
 
 set(radosgw_admin_srcs
   rgw_admin.cc
