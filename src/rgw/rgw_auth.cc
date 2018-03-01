@@ -91,6 +91,31 @@ transform_old_authinfo(const req_state* const s)
                                  s->system_request));
 }
 
+
+Strategy::Control get_engine_ctrl(const vector <std::string>& engine_order, std::string_view engine_name)
+{
+  using Control = rgw::auth::Strategy::Control;
+  if (engine_name == engine_order.back())
+    return Control::SUFFICIENT;
+
+  return Control::FALLBACK;
+}
+
+vector<std::string> parse_auth_order(const CephContext* cct)
+{
+  vector <std::string> result;
+  const vector <std::string> default_order = { "external", "local" };
+
+  boost::split(result, cct->_conf->rgw_auth_order, boost::is_any_of(", "));
+
+  // validate that the last element of the vector is a known engine, otherwise
+  // defer to the default order
+  if (find(default_order.begin(), default_order.end(), result.back()) == default_order.end())
+    return default_order;
+
+  return result;
+}
+
 } /* namespace auth */
 } /* namespace rgw */
 

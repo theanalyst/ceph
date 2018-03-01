@@ -505,6 +505,9 @@ protected:
   }
 };
 
+vector <std::string> parse_auth_order(const CephContext* cct);
+Strategy::Control get_engine_ctrl(const vector <std::string>& engine_order, std::string_view engine_name);
+
 } /* namespace auth */
 } /* namespace rgw */
 

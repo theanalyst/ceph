@@ -5203,6 +5203,10 @@ std::vector<Option> get_rgw_options() {
     .set_default(false)
     .set_description("Should S3 authentication use Keystone."),
 
+    Option("rgw_auth_order", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+     .set_default("external, local")
+     .set_description("Authentication strategy order to use for rgw, valid verbs external, local"),
+
     Option("rgw_barbican_url", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("")
     .set_description("URL to barbican server."),
