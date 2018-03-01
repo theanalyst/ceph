@@ -86,7 +86,6 @@ public:
   }
 };
 
-
 template <class AbstractorT,
           bool AllowAnonAccessT = false>
 class AWSAuthStrategy : public rgw::auth::Strategy,
@@ -114,6 +113,26 @@ class AWSAuthStrategy : public rgw::auth::Strategy,
     return aplptr_t(new decltype(apl)(std::move(apl)));
   }
 
+  void order_auth_engines(CephContext* const cct, LocalEngine& local_engine, ExternalAuthStrategy& external_engines)
+  {
+    vector<std::string> auth_order;
+    std::map <std::string, Engine&> auth_engine_map;
+    if (! external_engines.is_empty())
+      auth_engine_map["external"] = external_engines;
+    if (cct->_conf->rgw_s3_auth_use_rados)
+      auth_engine_map["local"] = local_engine;
+
+    boost::split(auth_order, cct->_conf->rgw_auth_order, boost::is_any_of(", "));
+    auto next_engine_mode = Control::SUFFICIENT;
+
+    for (const auto& auth_engine_name: auth_order){
+      const auto& kv = auth_engine_map.find(auth_engine_name);
+      if (kv != auth_engine_map.end()) {
+	rgw::auth::Strategy::add_engine(next_engine_mode, kv.second);
+	next_engine_mode = Control::FALLBACK;
+      }
+    }
+  }
 public:
   AWSAuthStrategy(CephContext* const cct,
                   RGWRados* const store)
@@ -129,20 +148,7 @@ public:
       add_engine(Control::SUFFICIENT, anonymous_engine);
     }
 
-    /* The external auth. */
-    Control local_engine_mode;
-    if (! external_engines.is_empty()) {
-      add_engine(Control::SUFFICIENT, external_engines);
-
-      local_engine_mode = Control::FALLBACK;
-    } else {
-      local_engine_mode = Control::SUFFICIENT;
-    }
-
-    /* The local auth. */
-    if (cct->_conf->rgw_s3_auth_use_rados) {
-      add_engine(local_engine_mode, local_engine);
-    }
+    order_auth_engines(cct, local_engine, external_engines);
   }
 
   const char* get_name() const noexcept override {

@@ -1142,6 +1142,27 @@ AWSv4ComplSingle::create(const req_state* const s,
   return std::make_shared<AWSv4ComplSingle>(s);
 }
 
+// void AWSAuthStrategy::order_auth_engines(CephContext* const cct,  const LocalEngine& local_engine, const ExternalAuthStrategy& external_engines){
+//   vector<std::string_view> auth_order;
+//   std::map <std::string, const Engine& engine> auth_engine_map;
+//   if (! external_engines.is_empty())
+//     auth_engine_map["external"] = external_engines;
+//   if (cct->_conf->rgw_s3_auth_use_rados)
+//     auth_engine_map["local"] = local_engine;
+
+//   boost::split(auth_order, cct->_conf->rgw_auth_order);
+//   auto next_engine_mode = Control::SUFFICIENT;
+
+//   for (const auto& auth_engine_name: auth_order){
+//     const auto& kv = auth_engine_map.find(auth_engine_name);
+//     if (kv != auth_engine_map.end()) {
+//       rgw::auth::Strategy::add_engine(next_engine_mode, kv.second);
+//       next_engine_mode = Control::FALLBACK;
+//     }
+//   }
+// }
+
+
 } /* namespace s3 */
 } /* namespace auth */
 } /* namespace rgw */
