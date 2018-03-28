@@ -1,5 +1,5 @@
 overrides:
   deepsea:
     exec:
-    - "suites/basic/health-nfs-ganesha.sh --cli --fsal=both"
+    - suites/basic/health-nfs-ganesha.sh --cli --fsal=both || true
     - sleep 1000000
