@@ -1138,6 +1138,11 @@ bool AuthMonitor::prepare_command(MonOpRequestRef op)
       }
     }
 
+    if (!valid_caps(caps_vec, &ss)) {
+      err = -EINVAL;
+      goto done;
+    }
+
     // are we about to have it?
     if (entity_is_pending(entity)) {
       wait_for_finished_proposal(op,
@@ -1206,7 +1211,7 @@ bool AuthMonitor::prepare_command(MonOpRequestRef op)
 						   get_last_committed() + 1));
     return true;
   } else if ((prefix == "auth get-or-create-key" ||
-	     prefix == "auth get-or-create") &&
+	      prefix == "auth get-or-create") &&
 	     !entity_name.empty()) {
     // auth get-or-create <name> [mon osdcapa osd osdcapb ...]
 
@@ -1312,6 +1317,11 @@ bool AuthMonitor::prepare_command(MonOpRequestRef op)
     cmd_getval(g_ceph_context, cmdmap, "filesystem", filesystem);
     string mds_cap_string, osd_cap_string;
     string osd_cap_wanted = "r";
+
+    if (!valid_caps(caps_vec, &ss)) {
+      err = -EINVAL;
+      goto done;
+    }
 
     for (auto it = caps_vec.begin();
 	 it != caps_vec.end() && (it + 1) != caps_vec.end();
