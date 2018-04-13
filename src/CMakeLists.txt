@@ -1067,6 +1067,8 @@ if(WITH_RADOSGW)
     set_property(TARGET civetweb_common_objs
       APPEND PROPERTY COMPILE_DEFINITIONS CRYPTO_LIB="${LIBCRYPTO_SONAME}")
   endif()
+  set_property(TARGET civetweb_common_objs
+    APPEND PROPERTY COMPILE_DEFINITIONS USE_OPENSSL_API_1_1=1)
 
   add_subdirectory(rgw)
 
