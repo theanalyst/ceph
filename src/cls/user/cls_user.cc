@@ -390,8 +390,8 @@ static int cls_user_reset_stats(cls_method_context_t hctx, bufferlist *in, buffe
   string from_index, prefix;
 #define MAX_ENTRIES 1000
   int rc;
+  map<string, bufferlist> keys;
   do {
-    map<string, bufferlist> keys;
     rc = cls_cxx_map_get_vals(hctx, from_index, prefix, MAX_ENTRIES, &keys);
 
     if (rc < 0)
@@ -410,7 +410,7 @@ static int cls_user_reset_stats(cls_method_context_t hctx, bufferlist *in, buffe
       from_index = kv.first;
       add_header_stats(&header.stats, e);
     }
-  } while (rc == MAX_ENTRIES);
+  } while (keys.size() == MAX_ENTRIES);
 
   bufferlist bl;
   header.last_stats_update = op.time;
