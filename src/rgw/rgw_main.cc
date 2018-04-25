@@ -174,7 +174,11 @@ static RGWRESTMgr *set_logging(RGWRESTMgr *mgr)
 static RGWRESTMgr *rest_filter(RGWRados *store, int dialect, RGWRESTMgr *orig)
 {
   RGWSyncModuleInstanceRef sync_module = store->get_sync_module();
-  return sync_module->get_rest_filter(dialect, orig);
+  if (sync_module) {
+    return sync_module->get_rest_filter(dialect, orig);
+  } else {
+    return orig;
+  }
 }
 
 /*
@@ -484,7 +488,7 @@ int main(int argc, const char **argv)
       std::string uri_prefix;
       config->get_val("prefix", "", &uri_prefix);
       RGWProcessEnv env{ store, &rest, olog, port, uri_prefix, auth_registry };
-      fe = new RGWAsioFrontend(env);
+      fe = new RGWAsioFrontend(env, config);
     }
 #endif /* WITH_RADOSGW_BEAST_FRONTEND */
 #if defined(WITH_RADOSGW_FCGI_FRONTEND)
