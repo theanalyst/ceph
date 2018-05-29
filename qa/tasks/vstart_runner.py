@@ -213,6 +213,15 @@ class LocalRemoteProcess(object):
 
         return FakeStdIn(self)
 
+class OS:
+    def __init__(self):
+        (os, ver ,  name) = platform.dist()
+        self.name = os
+        if self.name is 'ubuntu':
+            self.package_type = 'deb'
+        else:
+            self.package_type = 'rpm'
+
 
 class LocalRemote(object):
     """
@@ -226,6 +235,7 @@ class LocalRemote(object):
         self.name = "local"
         self.hostname = "localhost"
         self.user = getpass.getuser()
+        self.os = OS()
 
     def get_file(self, path, sudo, dest_dir):
         tmpfile = tempfile.NamedTemporaryFile(delete=False).name
