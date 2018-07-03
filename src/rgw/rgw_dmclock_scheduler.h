@@ -104,7 +104,8 @@ class Scheduler : public md_config_obs_t {
     Time started;
     Cost cost;
   };
-  constexpr bool IsDelayed = false;
+
+  static constexpr bool IsDelayed = false;
   using Queue = crimson::dmclock::PullPriorityQueue<client_id, Request, IsDelayed>;
   using RequestRef = typename Queue::RequestRef;
   Queue queue; //< dmclock priority queue
