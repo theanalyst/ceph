@@ -30,8 +30,7 @@ enum class client_id {
   count
 };
 
-using Cost = double; // may change to uint64_t
-
+using crimson::dmclock::Cost;
 using crimson::dmclock::ReqParams;
 using crimson::dmclock::PhaseType;
 using crimson::dmclock::ClientInfo;
