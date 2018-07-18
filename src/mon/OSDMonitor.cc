@@ -271,7 +271,6 @@ OSDMonitor::OSDMonitor(
    cct(cct),
    inc_osd_cache(g_conf->mon_osd_cache_size),
    full_osd_cache(g_conf->mon_osd_cache_size),
-   last_attempted_minwait_time(utime_t()),
    mapper(mn->cct, &mn->cpu_tp),
    op_tracker(cct, true, 1)
 {}
@@ -343,8 +342,9 @@ void OSDMonitor::create_initial()
   }
 
   // encode into pending incremental
+  uint64_t features = newmap.get_encoding_features();
   newmap.encode(pending_inc.fullmap,
-                mon->get_quorum_con_features() | CEPH_FEATURE_RESERVED);
+                features | CEPH_FEATURE_RESERVED);
   pending_inc.full_crc = newmap.get_crc();
   dout(20) << " full crc " << pending_inc.full_crc << dendl;
 }
@@ -1324,7 +1324,7 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
           uint32_t match_count = 0;
 
           // CephFS
-          FSMap const &pending_fsmap = mon->mdsmon()->get_pending();
+          const FSMap &pending_fsmap = mon->mdsmon()->get_pending_fsmap();
           if (pending_fsmap.pool_in_use(pool_id)) {
             dout(10) << __func__ << " auto-enabling CephFS on pool '"
                      << pool_name << "'" << dendl;
@@ -1413,7 +1413,7 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
   osdmap.maybe_remove_pg_upmaps(cct, osdmap, &pending_inc);
 
   // features for osdmap and its incremental
-  uint64_t features = mon->get_quorum_con_features();
+  uint64_t features;
 
   // encode full map and determine its crc
   OSDMap tmp;
@@ -1422,22 +1422,13 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
     tmp.apply_incremental(pending_inc);
 
     // determine appropriate features
-    if (tmp.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-      dout(10) << __func__ << " encoding without feature SERVER_LUMINOUS"
-	       << dendl;
-      features &= ~CEPH_FEATURE_SERVER_LUMINOUS;
-    }
-    if (tmp.require_osd_release < CEPH_RELEASE_KRAKEN) {
-      dout(10) << __func__ << " encoding without feature SERVER_KRAKEN | "
-	       << "MSG_ADDR2" << dendl;
-      features &= ~(CEPH_FEATURE_SERVER_KRAKEN |
-		    CEPH_FEATURE_MSG_ADDR2);
-    }
-    if (tmp.require_osd_release < CEPH_RELEASE_JEWEL) {
-      dout(10) << __func__ << " encoding without feature SERVER_JEWEL" << dendl;
-      features &= ~CEPH_FEATURE_SERVER_JEWEL;
-    }
-    dout(10) << __func__ << " encoding full map with " << features << dendl;
+    features = tmp.get_encoding_features();
+    dout(10) << __func__ << " encoding full map with "
+	     << ceph_release_name(tmp.require_osd_release)
+	     << " features " << features << dendl;
+
+    // the features should be a subset of the mon quorum's features!
+    assert((features & ~mon->get_quorum_con_features()) == 0);
 
     bufferlist fullbl;
     ::encode(tmp, fullbl, features | CEPH_FEATURE_RESERVED);
@@ -1641,8 +1632,13 @@ void OSDMonitor::share_map_with_random_osd()
   }
 
   dout(10) << "committed, telling random " << s->inst << " all about it" << dendl;
+
+  // get feature of the peer
+  // use quorum_con_features, if it's an anonymous connection.
+  uint64_t features = s->con_features ? s->con_features :
+                                        mon->get_quorum_con_features();
   // whatev, they'll request more if they need it
-  MOSDMap *m = build_incremental(osdmap.get_epoch() - 1, osdmap.get_epoch());
+  MOSDMap *m = build_incremental(osdmap.get_epoch() - 1, osdmap.get_epoch(), features);
   s->con->send_message(m);
   // NOTE: do *not* record osd has up to this epoch (as we do
   // elsewhere) as they may still need to request older values.
@@ -1821,22 +1817,6 @@ bool OSDMonitor::should_propose(double& delay)
     return true;
   }
 
-  // propose as fast as possible if updating up_thru or pg_temp
-  // want to merge OSDMap changes as much as possible
-  if ((pending_inc.new_primary_temp.size() == 1
-      || pending_inc.new_up_thru.size() == 1)
-      && pending_inc.new_state.size() < 2) {
-    dout(15) << " propose as fast as possible for up_thru/pg_temp" << dendl;
-
-    utime_t now = ceph_clock_now();
-    if (now - last_attempted_minwait_time > g_conf->paxos_propose_interval
-	&& now - paxos->get_last_commit_time() > g_conf->paxos_min_wait) {
-      delay = g_conf->paxos_min_wait;
-      last_attempted_minwait_time = now;
-      return true;
-    }
-  }
-
   return PaxosService::should_propose(delay);
 }
 
@@ -1849,21 +1829,26 @@ bool OSDMonitor::preprocess_get_osdmap(MonOpRequestRef op)
 {
   op->mark_osdmon_event(__func__);
   MMonGetOSDMap *m = static_cast<MMonGetOSDMap*>(op->get_req());
+
+  uint64_t features = mon->get_quorum_con_features();
+  if (m->get_session() && m->get_session()->con_features)
+    features = m->get_session()->con_features;
+
   dout(10) << __func__ << " " << *m << dendl;
-  MOSDMap *reply = new MOSDMap(mon->monmap->fsid);
+  MOSDMap *reply = new MOSDMap(mon->monmap->fsid, features);
   epoch_t first = get_first_committed();
   epoch_t last = osdmap.get_epoch();
   int max = g_conf->osd_map_message_max;
   for (epoch_t e = MAX(first, m->get_full_first());
        e <= MIN(last, m->get_full_last()) && max > 0;
        ++e, --max) {
-    int r = get_version_full(e, reply->maps[e]);
+    int r = get_version_full(e, features, reply->maps[e]);
     assert(r >= 0);
   }
   for (epoch_t e = MAX(first, m->get_inc_first());
        e <= MIN(last, m->get_inc_last()) && max > 0;
        ++e, --max) {
-    int r = get_version(e, reply->incremental_maps[e]);
+    int r = get_version(e, features, reply->incremental_maps[e]);
     assert(r >= 0);
   }
   reply->oldest_map = first;
@@ -1954,6 +1939,7 @@ bool OSDMonitor::preprocess_failure(MonOpRequestRef op)
   return false;
 
  didit:
+  mon->no_reply(op);
   return true;
 }
 
@@ -2338,6 +2324,7 @@ void OSDMonitor::process_failures()
           o->mark_event(__func__);
           MOSDFailure *m = o->get_req<MOSDFailure>();
           send_latest(o, m->get_epoch());
+	  mon->no_reply(o);
         }
 	ls.pop_front();
       }
@@ -3210,25 +3197,25 @@ void OSDMonitor::send_latest(MonOpRequestRef op, epoch_t start)
 }
 
 
-MOSDMap *OSDMonitor::build_latest_full()
+MOSDMap *OSDMonitor::build_latest_full(uint64_t features)
 {
-  MOSDMap *r = new MOSDMap(mon->monmap->fsid);
-  get_version_full(osdmap.get_epoch(), r->maps[osdmap.get_epoch()]);
+  MOSDMap *r = new MOSDMap(mon->monmap->fsid, features);
+  get_version_full(osdmap.get_epoch(), features, r->maps[osdmap.get_epoch()]);
   r->oldest_map = get_first_committed();
   r->newest_map = osdmap.get_epoch();
   return r;
 }
 
-MOSDMap *OSDMonitor::build_incremental(epoch_t from, epoch_t to)
+MOSDMap *OSDMonitor::build_incremental(epoch_t from, epoch_t to, uint64_t features)
 {
-  dout(10) << "build_incremental [" << from << ".." << to << "]" << dendl;
-  MOSDMap *m = new MOSDMap(mon->monmap->fsid);
+  dout(10) << "build_incremental [" << from << ".." << to << "] with features " << std::hex << features << dendl;
+  MOSDMap *m = new MOSDMap(mon->monmap->fsid, features);
   m->oldest_map = get_first_committed();
   m->newest_map = osdmap.get_epoch();
 
   for (epoch_t e = to; e >= from && e > 0; e--) {
     bufferlist bl;
-    int err = get_version(e, bl);
+    int err = get_version(e, features, bl);
     if (err == 0) {
       assert(bl.length());
       // if (get_version(e, bl) > 0) {
@@ -3238,7 +3225,7 @@ MOSDMap *OSDMonitor::build_incremental(epoch_t from, epoch_t to)
     } else {
       assert(err == -ENOENT);
       assert(!bl.length());
-      get_version_full(e, bl);
+      get_version_full(e, features, bl);
       if (bl.length() > 0) {
       //else if (get_version("full", e, bl) > 0) {
       dout(20) << "build_incremental   full " << e << " "
@@ -3256,7 +3243,7 @@ void OSDMonitor::send_full(MonOpRequestRef op)
 {
   op->mark_osdmon_event(__func__);
   dout(5) << "send_full to " << op->get_req()->get_orig_source_inst() << dendl;
-  mon->send_reply(op, build_latest_full());
+  mon->send_reply(op, build_latest_full(op->get_session()->con_features));
 }
 
 void OSDMonitor::send_incremental(MonOpRequestRef op, epoch_t first)
@@ -3289,6 +3276,11 @@ void OSDMonitor::send_incremental(epoch_t first,
   dout(5) << "send_incremental [" << first << ".." << osdmap.get_epoch() << "]"
 	  << " to " << session->inst << dendl;
 
+  // get feature of the peer
+  // use quorum_con_features, if it's an anonymous connection.
+  uint64_t features = session->con_features ? session->con_features :
+    mon->get_quorum_con_features();
+
   if (first <= session->osd_epoch) {
     dout(10) << __func__ << " " << session->inst << " should already have epoch "
 	     << session->osd_epoch << dendl;
@@ -3298,14 +3290,14 @@ void OSDMonitor::send_incremental(epoch_t first,
   if (first < get_first_committed()) {
     first = get_first_committed();
     bufferlist bl;
-    int err = get_version_full(first, bl);
+    int err = get_version_full(first, features, bl);
     assert(err == 0);
     assert(bl.length());
 
     dout(20) << "send_incremental starting with base full "
 	     << first << " " << bl.length() << " bytes" << dendl;
 
-    MOSDMap *m = new MOSDMap(osdmap.get_fsid());
+    MOSDMap *m = new MOSDMap(osdmap.get_fsid(), features);
     m->oldest_map = get_first_committed();
     m->newest_map = osdmap.get_epoch();
     m->maps[first] = bl;
@@ -3322,9 +3314,9 @@ void OSDMonitor::send_incremental(epoch_t first,
   }
 
   while (first <= osdmap.get_epoch()) {
-    epoch_t last = MIN(first + g_conf->osd_map_message_max - 1,
-		       osdmap.get_epoch());
-    MOSDMap *m = build_incremental(first, last);
+    epoch_t last = std::min<epoch_t>(first + g_conf->osd_map_message_max - 1,
+				     osdmap.get_epoch());
+    MOSDMap *m = build_incremental(first, last, features);
 
     if (req) {
       // send some maps.  it may not be all of them, but it will get them
@@ -3342,26 +3334,98 @@ void OSDMonitor::send_incremental(epoch_t first,
 
 int OSDMonitor::get_version(version_t ver, bufferlist& bl)
 {
-    if (inc_osd_cache.lookup(ver, &bl)) {
-      return 0;
-    }
-    int ret = PaxosService::get_version(ver, bl);
-    if (!ret) {
-      inc_osd_cache.add(ver, bl);
-    }
+  return get_version(ver, mon->get_quorum_con_features(), bl);
+}
+
+void OSDMonitor::reencode_incremental_map(bufferlist& bl, uint64_t features)
+{
+  OSDMap::Incremental inc;
+  bufferlist::iterator q = bl.begin();
+  inc.decode(q);
+  // always encode with subset of osdmap's canonical features
+  uint64_t f = features & inc.encode_features;
+  dout(20) << __func__ << " " << inc.epoch << " with features " << f
+	   << dendl;
+  bl.clear();
+  if (inc.fullmap.length()) {
+    // embedded full map?
+    OSDMap m;
+    m.decode(inc.fullmap);
+    inc.fullmap.clear();
+    m.encode(inc.fullmap, f | CEPH_FEATURE_RESERVED);
+  }
+  if (inc.crush.length()) {
+    // embedded crush map
+    CrushWrapper c;
+    auto p = inc.crush.begin();
+    c.decode(p);
+    inc.crush.clear();
+    c.encode(inc.crush, f);
+  }
+  inc.encode(bl, f | CEPH_FEATURE_RESERVED);
+}
+
+void OSDMonitor::reencode_full_map(bufferlist& bl, uint64_t features)
+{
+  OSDMap m;
+  bufferlist::iterator q = bl.begin();
+  m.decode(q);
+  // always encode with subset of osdmap's canonical features
+  uint64_t f = features & m.get_encoding_features();
+  dout(20) << __func__ << " " << m.get_epoch() << " with features " << f
+	   << dendl;
+  bl.clear();
+  m.encode(bl, f | CEPH_FEATURE_RESERVED);
+}
+
+int OSDMonitor::get_version(version_t ver, uint64_t features, bufferlist& bl)
+{
+  uint64_t significant_features = OSDMap::get_significant_features(features);
+  if (inc_osd_cache.lookup({ver, significant_features}, &bl)) {
+    return 0;
+  }
+  int ret = PaxosService::get_version(ver, bl);
+  if (ret < 0) {
     return ret;
+  }
+  // NOTE: this check is imprecise; the OSDMap encoding features may
+  // be a subset of the latest mon quorum features, but worst case we
+  // reencode once and then cache the (identical) result under both
+  // feature masks.
+  if (significant_features !=
+      OSDMap::get_significant_features(mon->get_quorum_con_features())) {
+    reencode_incremental_map(bl, features);
+  }
+  inc_osd_cache.add({ver, significant_features}, bl);
+  return 0;
 }
 
 int OSDMonitor::get_version_full(version_t ver, bufferlist& bl)
 {
-    if (full_osd_cache.lookup(ver, &bl)) {
-      return 0;
-    }
-    int ret = PaxosService::get_version_full(ver, bl);
-    if (!ret) {
-      full_osd_cache.add(ver, bl);
-    }
+  return get_version_full(ver, mon->get_quorum_con_features(), bl);
+}
+
+int OSDMonitor::get_version_full(version_t ver, uint64_t features,
+				 bufferlist& bl)
+{
+  uint64_t significant_features = OSDMap::get_significant_features(features);
+  if (full_osd_cache.lookup({ver, significant_features}, &bl)) {
+    return 0;
+  }
+  int ret = PaxosService::get_version_full(ver, bl);
+  if (ret < 0) {
     return ret;
+  }
+  // NOTE: this check is imprecise; the OSDMap encoding features may
+  // be a subset of the latest mon quorum features, but worst case we
+  // reencode once and then cache the (identical) result under both
+  // feature masks.
+  if (significant_features !=
+      OSDMap::get_significant_features(mon->get_quorum_con_features())) {
+    reencode_full_map(bl, features);
+  }
+  full_osd_cache.add({ver, significant_features}, bl);
+  return 0;
 }
 
 epoch_t OSDMonitor::blacklist(const entity_addr_t& a, utime_t until)
@@ -3398,7 +3462,7 @@ void OSDMonitor::check_osdmap_sub(Subscription *sub)
     if (sub->next >= 1)
       send_incremental(sub->next, sub->session, sub->incremental_onetime);
     else
-      sub->session->con->send_message(build_latest_full());
+      sub->session->con->send_message(build_latest_full(sub->session->con_features));
     if (sub->onetime)
       mon->session_map.remove_sub(sub);
     else
@@ -11833,6 +11897,10 @@ bool OSDMonitor::prepare_pool_op(MonOpRequestRef op)
 
   case POOL_OP_DELETE_UNMANAGED_SNAP:
     if (!pp.is_removed_snap(m->snapid)) {
+      if (m->snapid > pp.get_snap_seq()) {
+        _pool_op_reply(op, -ENOENT, osdmap.get_epoch());
+        return false;
+      }
       pp.remove_unmanaged_snap(m->snapid);
       changed = true;
     }
@@ -11874,7 +11942,7 @@ int OSDMonitor::_check_remove_pool(int64_t pool_id, const pg_pool_t& pool,
   const string& poolstr = osdmap.get_pool_name(pool_id);
 
   // If the Pool is in use by CephFS, refuse to delete it
-  FSMap const &pending_fsmap = mon->mdsmon()->get_pending();
+  FSMap const &pending_fsmap = mon->mdsmon()->get_pending_fsmap();
   if (pending_fsmap.pool_in_use(pool_id)) {
     *ss << "pool '" << poolstr << "' is in use by CephFS";
     return -EBUSY;
@@ -11923,7 +11991,7 @@ bool OSDMonitor::_check_become_tier(
   const std::string &tier_pool_name = osdmap.get_pool_name(tier_pool_id);
   const std::string &base_pool_name = osdmap.get_pool_name(base_pool_id);
 
-  const FSMap &pending_fsmap = mon->mdsmon()->get_pending();
+  const FSMap &pending_fsmap = mon->mdsmon()->get_pending_fsmap();
   if (pending_fsmap.pool_in_use(tier_pool_id)) {
     *ss << "pool '" << tier_pool_name << "' is in use by CephFS";
     *err = -EBUSY;
@@ -11983,7 +12051,7 @@ bool OSDMonitor::_check_remove_tier(
   const std::string &base_pool_name = osdmap.get_pool_name(base_pool_id);
 
   // Apply CephFS-specific checks
-  const FSMap &pending_fsmap = mon->mdsmon()->get_pending();
+  const FSMap &pending_fsmap = mon->mdsmon()->get_pending_fsmap();
   if (pending_fsmap.pool_in_use(base_pool_id)) {
     if (base_pool->is_erasure() && !base_pool->allows_ecoverwrites()) {
       // If the underlying pool is erasure coded and does not allow EC
