@@ -430,7 +430,7 @@ int main(int argc, const char **argv)
   namespace dmc = rgw::dmclock;
   auto dmclock_clients = dmc::ClientConfig{cct.get()};
   auto dmclock_counters = dmc::ClientCounters{cct.get()};
-  auto dmclock_scheduler = dmc::Scheduler(cct.get(), iocontext,
+  auto dmclock_scheduler = dmc::AsyncScheduler(cct.get(), iocontext,
                                           std::ref(dmclock_counters),
                                           &dmclock_clients,
                                           std::ref(dmclock_clients),

@@ -16,7 +16,7 @@
 
 namespace rgw::dmclock {
 
-Scheduler::~Scheduler()
+AsyncScheduler::~AsyncScheduler()
 {
   cancel();
   if (observer) {
@@ -24,7 +24,7 @@ Scheduler::~Scheduler()
   }
 }
 
-const char** Scheduler::get_tracked_conf_keys() const
+const char** AsyncScheduler::get_tracked_conf_keys() const
 {
   if (observer) {
     return observer->get_tracked_conf_keys();
@@ -33,7 +33,7 @@ const char** Scheduler::get_tracked_conf_keys() const
   return keys;
 }
 
-void Scheduler::handle_conf_change(const md_config_t *conf,
+void AsyncScheduler::handle_conf_change(const md_config_t *conf,
                                    const std::set<std::string>& changed)
 {
   if (observer) {
@@ -64,13 +64,13 @@ void inc(ClientSums& sums, client_id client, Cost cost)
 void on_cancel(PerfCounters *c, const ClientSum& sum);
 void on_process(PerfCounters* c, const ClientSum& rsum, const ClientSum& psum);
 
-void Scheduler::request_complete()
+void AsyncScheduler::request_complete()
 {
   --outstanding_requests;
   schedule(crimson::dmclock::TimeZero);
 }
 
-void Scheduler::cancel()
+void AsyncScheduler::cancel()
 {
   ClientSums sums;
 
@@ -91,7 +91,7 @@ void Scheduler::cancel()
   }
 }
 
-void Scheduler::cancel(const client_id& client)
+void AsyncScheduler::cancel(const client_id& client)
 {
   ClientSum sum;
 
@@ -109,19 +109,19 @@ void Scheduler::cancel(const client_id& client)
   schedule(crimson::dmclock::TimeZero);
 }
 
-void Scheduler::schedule(const Time& time)
+void AsyncScheduler::schedule(const Time& time)
 {
   timer.expires_at(Clock::from_double(time));
   timer.async_wait([this] (boost::system::error_code ec) {
       // process requests unless the wait was canceled. note that a canceled
-      // wait may execute after this Scheduler destructs
+      // wait may execute after this AsyncScheduler destructs
       if (ec != boost::asio::error::operation_aborted) {
         process(get_time());
       }
     });
 }
 
-void Scheduler::process(const Time& now)
+void AsyncScheduler::process(const Time& now)
 {
   // must run in the executor. we should only invoke completion handlers if the
   // executor is running

@@ -33,7 +33,7 @@ void RGWProcess::RGWWQ::_dump_queue()
   }
 } /* RGWProcess::RGWWQ::_dump_queue */
 
-static int wait_for_dmclock(rgw::dmclock::Scheduler *scheduler,
+static int wait_for_dmclock(rgw::dmclock::AsyncScheduler *scheduler,
                             req_state *s, RGWOp *op)
 {
   auto& yield = s->yield.get_yield_context();
@@ -141,7 +141,7 @@ int process_request(RGWRados* const store,
                     RGWRestfulIO* const client_io,
                     OpsLogSocket* const olog,
                     optional_yield_context yield,
-                    rgw::dmclock::Scheduler *scheduler,
+                    rgw::dmclock::AsyncScheduler *scheduler,
                     int* http_ret)
 {
   int ret = client_io->init(g_ceph_context);
@@ -174,7 +174,7 @@ int process_request(RGWRados* const store,
   ldpp_dout(s, 2) << "initializing for trans_id = " << s->trans_id << dendl;
 
   struct Completer {
-    rgw::dmclock::Scheduler *scheduler = nullptr;
+    rgw::dmclock::AsyncScheduler *scheduler = nullptr;
     ~Completer() { if (scheduler) scheduler->request_complete(); }
   } dmclock_scoped_completer;
 

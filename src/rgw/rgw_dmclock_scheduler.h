@@ -53,6 +53,67 @@ using GetClientCounters = std::function<PerfCounters*(client_id)>;
 
 namespace async = ceph::async;
 
+struct Request {
+  client_id client;
+  Time started;
+  Cost cost;
+};
+
+
+class SyncScheduler {
+public:
+  template <typename ...Args>
+  SyncScheduler(CephContext *cct, GetClientCounters&& counters,
+		Args&& ...args);
+  ~SyncScheduler();
+
+  auto add_request(const client_id& client, const ReqParams& params,
+		   const Time& time, Cost cost);
+
+  void cancel();
+
+  void cancel(const client_id& client);
+
+private:
+  static constexpr bool IsDelayed = false;
+  using Queue = crimson::dmclock::PushPriorityQueue<client_id, Request, IsDelayed>;
+  using RequestRef = typename Queue::RequestRef;
+  Queue queue;
+  GetClientCounters counters; //< provides per-client perf counters
+
+  void schedule(const Time& time);
+  void process(const Time& now);
+  CephContext const *cct;
+};
+
+template <typename ...Args>
+SyncScheduler::SyncScheduler(CephContext *cct, GetClientCounters&& counters,
+			     Args&& ...args):
+  queue(std::forward<Args>(args)...), cct(cct), counters(std::move(counters))
+{}
+
+auto SyncScheduler::add_request(const client_id& client, const ReqParams& params,
+				const Time& time, Cost cost)
+{
+  auto req = Request{client,time,cost};
+  //auto reqr = RequestRef{std::move(req)};
+  int r = queue.add_request_time(req, client, params, time, cost);
+  if (r == 0) {
+    // schedule an immediate call to process() on the executor
+    schedule(crimson::dmclock::TimeZero);
+    if (auto c = counters(client)) {
+      c->inc(queue_counters::l_qlen);
+      c->inc(queue_counters::l_cost, cost);
+    }
+  } else {
+    // post the error code
+    if (auto c = counters(client)) {
+      c->inc(queue_counters::l_limit);
+      c->inc(queue_counters::l_limit_cost, cost);
+    }
+  }
+  return r;
+}
 
 /*
  * A dmclock request scheduling service for use with boost::asio.
@@ -60,13 +121,13 @@ namespace async = ceph::async;
  * An asynchronous dmclock priority queue, where scheduled requests complete
  * on a boost::asio executor.
  */
-class Scheduler : public md_config_obs_t {
+class AsyncScheduler : public md_config_obs_t {
  public:
   template <typename ...Args> // args forwarded to PullPriorityQueue ctor
-  Scheduler(CephContext *cct, boost::asio::io_context& context,
+  AsyncScheduler(CephContext *cct, boost::asio::io_context& context,
             GetClientCounters&& counters, md_config_obs_t *observer,
             Args&& ...args);
-  ~Scheduler();
+  ~AsyncScheduler();
 
   using executor_type = boost::asio::io_context::executor_type;
 
@@ -99,11 +160,6 @@ class Scheduler : public md_config_obs_t {
                           const std::set<std::string>& changed) override;
 
  private:
-  struct Request {
-    client_id client;
-    Time started;
-    Cost cost;
-  };
 
   static constexpr bool IsDelayed = false;
   using Queue = crimson::dmclock::PullPriorityQueue<client_id, Request, IsDelayed>;
@@ -134,7 +190,7 @@ class Scheduler : public md_config_obs_t {
 
 
 template <typename ...Args>
-Scheduler::Scheduler(CephContext *cct, boost::asio::io_context& context,
+AsyncScheduler::AsyncScheduler(CephContext *cct, boost::asio::io_context& context,
                      GetClientCounters&& counters,
                      md_config_obs_t *observer, Args&& ...args)
   : queue(std::forward<Args>(args)...),
@@ -151,7 +207,7 @@ Scheduler::Scheduler(CephContext *cct, boost::asio::io_context& context,
 }
 
 template <typename CompletionToken>
-auto Scheduler::async_request(const client_id& client,
+auto AsyncScheduler::async_request(const client_id& client,
                               const ReqParams& params,
                               const Time& time, Cost cost,
                               CompletionToken&& token)

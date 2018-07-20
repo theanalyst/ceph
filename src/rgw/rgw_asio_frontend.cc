@@ -82,7 +82,7 @@ template <typename Stream>
 void handle_connection(RGWProcessEnv& env, Stream& stream,
                        boost::beast::flat_buffer& buffer, bool is_ssl,
                        SharedMutex& pause_mutex,
-                       rgw::dmclock::Scheduler *scheduler,
+                       rgw::dmclock::AsyncScheduler *scheduler,
                        boost::system::error_code& ec,
                        boost::asio::yield_context yield)
 {
@@ -228,7 +228,7 @@ class AsioFrontend {
   int init_ssl();
 #endif
   SharedMutex pause_mutex;
-  rgw::dmclock::Scheduler *scheduler;
+  rgw::dmclock::AsyncScheduler *scheduler;
 
   struct Listener {
     tcp::endpoint endpoint;
@@ -257,7 +257,7 @@ class AsioFrontend {
  public:
   AsioFrontend(const RGWProcessEnv& env, RGWFrontendConfig* conf,
                boost::asio::io_context& context,
-               rgw::dmclock::Scheduler *scheduler)
+               rgw::dmclock::AsyncScheduler *scheduler)
     : env(env), conf(conf), context(context),
       pause_mutex(context.get_executor()),
       scheduler(scheduler)
@@ -600,14 +600,14 @@ class RGWAsioFrontend::Impl : public AsioFrontend {
  public:
   Impl(const RGWProcessEnv& env, RGWFrontendConfig* conf,
        boost::asio::io_context& context,
-       rgw::dmclock::Scheduler *scheduler)
+       rgw::dmclock::AsyncScheduler *scheduler)
     : AsioFrontend(env, conf, context, scheduler) {}
 };
 
 RGWAsioFrontend::RGWAsioFrontend(const RGWProcessEnv& env,
                                  RGWFrontendConfig* conf,
                                  boost::asio::io_context& context,
-                                 rgw::dmclock::Scheduler *scheduler)
+                                 rgw::dmclock::AsyncScheduler *scheduler)
   : impl(new Impl(env, conf, context, scheduler))
 {
 }
