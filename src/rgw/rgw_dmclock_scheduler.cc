@@ -173,6 +173,37 @@ void AsyncScheduler::process(const Time& now)
   }
 }
 
+auto SyncScheduler::add_request(const client_id& client, const ReqParams& params,
+                                const Time& time, Cost cost)
+{
+    auto req = Request{client,time,cost};
+    int r = queue.add_request_time(req, client, params, time, cost);
+    if (r == 0) {
+      // schedule an immediate call to process() on the executor
+      schedule(crimson::dmclock::TimeZero);
+      if (auto c = counters(client)) {
+        c->inc(queue_counters::l_qlen);
+        c->inc(queue_counters::l_cost, cost);
+      }
+    } else {
+      // post the error code
+      if (auto c = counters(client)) {
+        c->inc(queue_counters::l_limit);
+        c->inc(queue_counters::l_limit_cost, cost);
+      }
+    }
+    return r;
+}
+
+
+
+void SyncScheduler::schedule(const Time& time)
+{
+
+}
+
+void SyncScheduler::process(const Time& now)
+{}
 
 void on_cancel(PerfCounters *c, const ClientSum& sum)
 {

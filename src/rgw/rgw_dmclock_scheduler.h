@@ -68,7 +68,7 @@ public:
   ~SyncScheduler();
 
   auto add_request(const client_id& client, const ReqParams& params,
-		   const Time& time, Cost cost);
+		    const Time& time, Cost cost);
 
   void cancel();
 
@@ -92,28 +92,8 @@ SyncScheduler::SyncScheduler(CephContext *cct, GetClientCounters&& counters,
   queue(std::forward<Args>(args)...), cct(cct), counters(std::move(counters))
 {}
 
-auto SyncScheduler::add_request(const client_id& client, const ReqParams& params,
-				const Time& time, Cost cost)
-{
-  auto req = Request{client,time,cost};
-  //auto reqr = RequestRef{std::move(req)};
-  int r = queue.add_request_time(req, client, params, time, cost);
-  if (r == 0) {
-    // schedule an immediate call to process() on the executor
-    schedule(crimson::dmclock::TimeZero);
-    if (auto c = counters(client)) {
-      c->inc(queue_counters::l_qlen);
-      c->inc(queue_counters::l_cost, cost);
-    }
-  } else {
-    // post the error code
-    if (auto c = counters(client)) {
-      c->inc(queue_counters::l_limit);
-      c->inc(queue_counters::l_limit_cost, cost);
-    }
-  }
-  return r;
-}
+  //auto SyncScheduler::sync_request(const client_id& client, const ReqParams& params,
+  //				const Time& time, Cost cost)
 
 /*
  * A dmclock request scheduling service for use with boost::asio.
