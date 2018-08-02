@@ -59,6 +59,23 @@ struct Request {
   Cost cost;
 };
 
+enum class ReqState {
+  Wait,
+  Ready,
+  Cancelled
+};
+// For a blocking SyncRequest we hold a reference to a cv and the caller must
+// ensure the lifetime
+struct SyncRequest : public Request {
+  std::mutex& req_mtx;
+  std::condition_variable& req_cv;
+  ReqState& req_state;
+  explicit SyncRequest(client_id _id, Time started, Cost cost,
+		       std::mutex& mtx, std::condition_variable& _cv,
+		       ReqState& _state):
+    Request{_id, started, cost}, req_mtx(mtx), req_cv(_cv), req_state(_state) {};
+};
+
 
 class SyncScheduler {
 public:
@@ -67,6 +84,8 @@ public:
 		Args&& ...args);
   ~SyncScheduler();
 
+  // submit a blocking request for dmclock scheduling, this function waits until
+  // the request is ready.
   auto add_request(const client_id& client, const ReqParams& params,
 		    const Time& time, Cost cost);
 
@@ -76,7 +95,7 @@ public:
 
 private:
   static constexpr bool IsDelayed = false;
-  using Queue = crimson::dmclock::PushPriorityQueue<client_id, Request, IsDelayed>;
+  using Queue = crimson::dmclock::PushPriorityQueue<client_id, SyncRequest, IsDelayed>;
   using RequestRef = typename Queue::RequestRef;
   Queue queue;
   GetClientCounters counters; //< provides per-client perf counters
@@ -91,9 +110,6 @@ SyncScheduler::SyncScheduler(CephContext *cct, GetClientCounters&& counters,
 			     Args&& ...args):
   queue(std::forward<Args>(args)...), cct(cct), counters(std::move(counters))
 {}
-
-  //auto SyncScheduler::sync_request(const client_id& client, const ReqParams& params,
-  //				const Time& time, Cost cost)
 
 /*
  * A dmclock request scheduling service for use with boost::asio.
