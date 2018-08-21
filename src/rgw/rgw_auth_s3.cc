@@ -533,15 +533,7 @@ std::string get_v4_canonical_qs(const req_info& info, const bool using_qs)
       /* Preserving the original behaviour of get_v4_canonical_qs() here. */
       continue;
     }
-
-    if (key == "X-Amz-Credential") {
-      /* FIXME(rzarzynski): I can't find any comment in the previously linked
-       * Amazon's docs saying that X-Amz-Credential should be handled in this
-       * way. */
-      canonical_qs_map[key.to_string()] = val.to_string();
-    } else {
-      canonical_qs_map[aws4_uri_recode(key)] = aws4_uri_recode(val);
-    }
+    canonical_qs_map[aws4_uri_recode(key)] = aws4_uri_recode(val);
   }
 
   /* Thanks to the early exist we have the guarantee that canonical_qs_map has
