@@ -1,4 +1,4 @@
 overrides:
   deepsea:
     exec:
-    - suites/basic/health-igw.sh
+    - suites/basic/health-ok.sh --client-nodes=1 --igw --min-nodes=2
