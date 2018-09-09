@@ -127,9 +127,10 @@ class DeepSea(Task):
 
         self.salt.master_remote.run(args=[
             'git',
+            '--version',
+            run.Raw(';'),
+            'git',
             'clone',
-            '--depth',
-            '1',
             '--branch',
             self.config["branch"],
             self.config["repo"],
@@ -148,6 +149,11 @@ class DeepSea(Task):
             'git',
             'rev-parse',
             'HEAD',
+            run.Raw(';'),
+            'git',
+            'describe',
+            run.Raw('||'),
+            'true',
             ])
 
         self.log.info("Running \"make install\" in DeepSea clone...")
