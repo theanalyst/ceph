@@ -140,6 +140,7 @@
     reshard list               list all bucket resharding or scheduled to be reshared
     reshard process            process of scheduled reshard jobs
     reshard cancel             cancel resharding a bucket
+    reshard cleanup            cleanup old index objects from a resharded bucket
     sync error list            list sync error
     sync error trim            trim sync error
   options:
