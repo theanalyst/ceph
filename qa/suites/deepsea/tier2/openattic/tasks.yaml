@@ -1,1 +1,10 @@
-../../../../deepsea/tasks.yaml
+tasks:
+- install:
+    install_packages: false
+- exec:
+    master.a:
+      - "zypper search --details lrbd"
+- deepsea:
+    repo: https://github.com/SUSE/DeepSea.git
+    branch: SES5
+    exec: []
