@@ -1,5 +1,6 @@
 from teuthology import misc
 
+
 def get_remote(ctx, cluster, service_type, service_id):
     """
     Get the Remote for the host where a particular role runs.
@@ -22,5 +23,37 @@ def get_remote(ctx, cluster, service_type, service_id):
                                                               service_id))
     return remote
 
+
 def get_remote_for_role(ctx, role):
     return get_remote(ctx, *misc.split_role(role))
+
+
+def copy_directory_recursively(from_path, to_remote, to_path=None):
+    """
+    Recursively copies a local directory to a remote.
+    """
+    if to_path is None:
+        to_path = from_path
+    misc.sh("scp -r -v {from_path} {host}:{to_path}".format(
+            from_path=from_path, host=to_remote.name, to_path=to_path))
+
+
+def sudo_append_to_file(remote, path, data):
+    """
+    Append data to a remote file. Standard 'cat >>' - creates file
+    if it doesn't exist, but all directory components in the file
+    path must exist.
+
+    :param remote: Remote site.
+    :param path: Path on the remote being written to.
+    :param data: Python string containing data to be written.
+    """
+    remote.run(
+        args=[
+            'sudo',
+            'sh',
+            '-c',
+            'cat >> ' + path,
+        ],
+        stdin=data,
+    )
