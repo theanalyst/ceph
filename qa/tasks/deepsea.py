@@ -641,9 +641,9 @@ class DeepSea(Task):
         # configured chrony for time synchronization within the cluster
         # and DeepSea Stage 3 will point the minions at the Salt Master's
         # chrony instance (?)
-        self.sm.master_rpm_q('chrony')
+        self.sm.master_rpm_q('ntp')
         self.master_remote.run(
-            args="sudo systemctl status --lines=0 chronyd.service"
+            args="sudo systemctl status --lines=0 ntpd.service"
             )
         self._master_python_version(2)
         if not self._master_python_version(3):
