@@ -274,7 +274,6 @@ class DeepSea(Task):
             '--force',
             '--no-recommends',
             'deepsea',
-            'deepsea-cli',
             'deepsea-qa'
             ])
 
