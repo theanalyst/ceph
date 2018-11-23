@@ -1773,6 +1773,12 @@ rados -p write_test put test_object verify.txt
 rados -p write_test get test_object verify_returned.txt
 test "x$(cat verify.txt)" = "x$(cat verify_returned.txt)"
 """,
+        "openattic_smoke_test": """# openATTIC smoke test
+set -ex
+systemctl status --full --lines=0 apache2.service
+ss --tcp --numeric state listening
+echo "OK" >/dev/null
+""",
         }
 
     def __init__(self, master_remote, logger):
@@ -1809,6 +1815,14 @@ test "x$(cat verify.txt)" = "x$(cat verify_returned.txt)"
             'custom_storage_profile.sh',
             self.script_dict["custom_storage_profile"],
             args=[proposals_dir, sourcefile],
+            )
+
+    def openattic_smoke_test(self, *args, **kwargs):
+        remote = args[0]
+        remote_run_script_as_root(
+            remote,
+            'openattic_smoke_test.sh',
+            self.script_dict["openattic_smoke_test"],
             )
 
     def proposals_remove_storage_only_node(self, *args, **kwargs):
@@ -1893,6 +1907,12 @@ class Validation(DeepSea):
 
     def ceph_version_sanity(self, **kwargs):
         self.scripts.ceph_version_sanity()
+
+    def openattic_smoke_test(self, **kwargs):
+        oa_host = self.role_type_present("openattic")
+        if oa_host:
+            remote = self.remotes[oa_host]
+            self.scripts.openattic_smoke_test(remote)
 
     def rados_write_test(self, **kwargs):
         self.scripts.rados_write_test()
