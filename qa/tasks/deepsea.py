@@ -999,24 +999,6 @@ class Orch(DeepSea):
             raise
         self.scripts.salt_api_test()
 
-    def __dump_lvm_status(self):
-        """
-        Run "pvs --all", "vgs --all", and "lvs --all" on all storage nodes.
-        """
-        self.log.info("Dumping LVM status on storage nodes ->{}<-"
-                      .format(self.storage_nodes))
-        lvm_status_script = ("set -ex\n"
-                             "pvs --all\n"
-                             "vgs --all\n"
-                             "lvs --all\n")
-        for hostname in self.storage_nodes:
-            remote = self.remotes[hostname]
-            remote_run_script_as_root(
-                remote,
-                'lvm_status.sh',
-                lvm_status_script,
-                )
-
     def __is_stage_between_0_and_5(self):
         """
         This is implemented as a separate function because the stage specified
@@ -1037,6 +1019,19 @@ class Orch(DeepSea):
             "Running DeepSea Stage {} ({})"
             .format(stage, self.stage_synonyms[stage])
             ))
+
+    def __lsblk_and_ceph_disk_list(self):
+        for osd_host in self.storage_nodes:
+            remote = self.remotes[osd_host]
+            cmd = ('set -ex\n'
+                   'lsblk\n'
+                   'ceph-disk list\n'
+                   )
+            remote_run_script_as_root(
+                remote,
+                'lsblk_and_ceph_disk_list.sh',
+                cmd,
+                )
 
     def __maybe_cat_ganesha_conf(self):
         ganesha_host = self.role_type_present('ganesha')
@@ -1201,7 +1196,7 @@ class Orch(DeepSea):
             'cat /etc/ceph/ceph.conf',
             abort_on_fail=False
             )
-        self.__dump_lvm_status()
+        self.__lsblk_and_ceph_disk_list()
         self.scripts.ceph_cluster_status()
         self.__ceph_health_test()
 
