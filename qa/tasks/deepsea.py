@@ -1064,14 +1064,6 @@ class Orch(DeepSea):
             if self.rgw_ssl:
                 self.scripts.rgw_init_ssl()
 
-    # FIXME: run on each minion individually, and compare deepsea "roles"
-    # with teuthology roles!
-    def _pillar_items(self):
-        cmd = "sudo salt \\* pillar.items"
-        if self.quiet_salt:
-            cmd += " 2>/dev/null"
-        self.master_remote.run(args=cmd)
-
     def _nfs_ganesha_no_root_squash(self):
         self.log.info("NFS-Ganesha set No_root_squash")
         ganeshaj2 = '/srv/salt/ceph/ganesha/files/ganesha.conf.j2'
@@ -1080,6 +1072,14 @@ class Orch(DeepSea):
             '/Access_Type = RW;/a \tSquash = No_root_squash;',
             ganeshaj2,
             ]
+        self.master_remote.run(args=cmd)
+
+    # FIXME: run on each minion individually, and compare deepsea "roles"
+    # with teuthology roles!
+    def _pillar_items(self):
+        cmd = "sudo salt \\* pillar.items"
+        if self.quiet_salt:
+            cmd += " 2>/dev/null"
         self.master_remote.run(args=cmd)
 
     def _run_orch(self, orch_tuple):
@@ -1207,6 +1207,10 @@ class Orch(DeepSea):
         stage = 4
         if self.role_type_present("ganesha"):
             self._nfs_ganesha_no_root_squash()
+        igw_host = self.role_type_present("igw")
+        if igw_host:
+            igw_remote = self.remotes[igw_host]
+            self.scripts.enable_targetcli_debug_logging(igw_remote)
         self.__log_stage_start(stage)
         self._run_orch(("stage", stage))
         self.__maybe_cat_ganesha_conf()
@@ -1760,7 +1764,7 @@ echo "According to \"ceph --version\", the ceph upstream version is ->$CEPH_CEPH
 test -n "$RPM_CEPH_VERSION"
 test "$RPM_CEPH_VERSION" = "$CEPH_CEPH_VERSION"
 """,
-        "rados_write_test": """Write a RADOS object and read it back
+        "rados_write_test": """# Write a RADOS object and read it back
 #
 # NOTE: function assumes the pool "write_test" already exists. Pool can be
 # created by calling e.g. "create_all_pools_at_once write_test" immediately
@@ -1779,6 +1783,45 @@ systemctl status --full --lines=0 apache2.service
 ss --tcp --numeric state listening
 echo "OK" >/dev/null
 """,
+        "enable_targetcli_debug_logging": """# Enable targetcli debug logging
+set -ex
+zypper --non-interactive --no-gpg-checks install \
+    --force --no-recommends targetcli-rbd
+targetcli / set global loglevel_file=debug
+""",
+        "iscsi_smoke_test": """# iSCSI Gateway smoke test
+set -x
+rpm -q lrbd
+lrbd --output
+ls -lR /sys/kernel/config/target/
+ss --tcp --numeric state listening
+echo "See 3260 there?"
+set -e
+zypper --non-interactive --no-gpg-checks install \
+    --force --no-recommends open-iscsi
+systemctl start iscsid.service
+sleep 5
+systemctl --no-pager --full status iscsid.service
+iscsiadm -m discovery -t st -p $(hostname)
+iscsiadm -m node -L all
+sleep 5
+ls -l /dev/disk/by-path
+ls -l /dev/disk/by-*id
+if ( mkfs -t xfs /dev/disk/by-path/*iscsi* ) ; then
+    :
+else
+    dmesg
+    false
+fi
+test -d /mnt
+mount /dev/disk/by-path/*iscsi* /mnt
+df -h /mnt
+echo hubba > /mnt/bubba
+test -s /mnt/bubba
+umount /mnt
+iscsiadm -m node --logout
+echo "OK" >/dev/null
+"""
         }
 
     def __init__(self, master_remote, logger):
@@ -1815,6 +1858,22 @@ echo "OK" >/dev/null
             'custom_storage_profile.sh',
             self.script_dict["custom_storage_profile"],
             args=[proposals_dir, sourcefile],
+            )
+
+    def enable_targetcli_debug_logging(self, *args, **kwargs):
+        remote = args[0]
+        remote_run_script_as_root(
+            remote,
+            'enable_targetcli_debug_logging.sh',
+            self.script_dict["enable_targetcli_debug_logging"],
+            )
+
+    def iscsi_smoke_test(self, *args, **kwargs):
+        remote = args[0]
+        remote_run_script_as_root(
+            remote,
+            'iscsi_smoke_test.sh',
+            self.script_dict["iscsi_smoke_test"],
             )
 
     def openattic_smoke_test(self, *args, **kwargs):
@@ -1907,6 +1966,12 @@ class Validation(DeepSea):
 
     def ceph_version_sanity(self, **kwargs):
         self.scripts.ceph_version_sanity()
+
+    def iscsi_smoke_test(self, **kwargs):
+        igw_host = self.role_type_present("igw")
+        if igw_host:
+            remote = self.remotes[igw_host]
+            self.scripts.iscsi_smoke_test(remote)
 
     def openattic_smoke_test(self, **kwargs):
         oa_host = self.role_type_present("openattic")
