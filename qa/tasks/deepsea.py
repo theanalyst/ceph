@@ -1044,20 +1044,6 @@ class Orch(DeepSea):
             ganesha_remote = self.remotes[ganesha_host]
             ganesha_remote.run(args="cat /etc/ganesha/ganesha.conf")
 
-    def __mgr_dashboard_module_deploy(self):
-        script = ("# deploy MGR dashboard module\n"
-                  "set -ex\n"
-                  "ceph mgr module enable dashboard\n")
-        if self.dashboard_ssl:
-            script += "ceph dashboard create-self-signed-cert\n"
-        else:
-            script += "ceph config set mgr mgr/dashboard/ssl false\n"
-        remote_run_script_as_root(
-            self.master_remote,
-            'mgr_dashboard_module_deploy.sh',
-            script,
-            )
-
     def __zypper_ps_with_possible_reboot(self):
         if self.sm.all_minions_zypper_ps_requires_reboot():
             log_spec = "Detected updates requiring reboot"
@@ -1211,7 +1197,6 @@ class Orch(DeepSea):
         stage = 3
         self.__log_stage_start(stage)
         self._run_orch(("stage", stage))
-        self.__mgr_dashboard_module_deploy()
         self.sm.all_minions_cmd_run(
             'cat /etc/ceph/ceph.conf',
             abort_on_fail=False
@@ -1762,13 +1747,6 @@ echo "Your custom storage profile $SOURCEFILE has the following contents:"
 cat $DESTDIR/$DESTFILE
 ls -lR $PROPOSALSDIR/profile-custom
 """,
-        "mgr_dashboard_module_smoke": """# smoke test the MGR dashbaord module
-set -ex
-URL=$(ceph mgr services 2>/dev/null | jq .dashboard | sed -e 's/"//g')
-curl --insecure --silent $URL 2>&1 > dashboard.html
-test -s dashboard.html
-file dashboard.html | grep "HTML document"
-""",
         "ceph_version_sanity": """# Ceph version sanity test
 # test that ceph RPM version matches "ceph --version"
 # for a loose definition of "matches"
@@ -1835,13 +1813,6 @@ test "x$(cat verify.txt)" = "x$(cat verify_returned.txt)"
             'custom_storage_profile.sh',
             self.script_dict["custom_storage_profile"],
             args=[proposals_dir, sourcefile],
-            )
-
-    def mgr_dashboard_module_smoke(self, *args, **kwargs):
-        remote_run_script_as_root(
-            self.master_remote,
-            'mgr_dashboard_module_smoke.sh',
-            self.script_dict["mgr_dashboard_module_smoke"],
             )
 
     def proposals_remove_storage_only_node(self, *args, **kwargs):
@@ -1916,7 +1887,6 @@ class Validation(DeepSea):
         self.name = 'deepsea.validation'
         super(Validation, self).__init__(ctx, config)
         self._apply_config_default("ceph_version_sanity", None)
-        self._apply_config_default("mgr_dashboard_module_smoke", None)
         self._apply_config_default("rados_striper", None)
         self._apply_config_default("systemd_units_active", None)
 
@@ -1928,12 +1898,6 @@ class Validation(DeepSea):
 
     def ceph_version_sanity(self, **kwargs):
         self.scripts.ceph_version_sanity()
-
-    def mgr_dashboard_module_smoke(self, **kwargs):
-        """
-        Note: MGR dashboard module was already deployed in _run_stage_3
-        """
-        self.scripts.mgr_dashboard_module_smoke()
 
     def rados_striper(self, **kwargs):
         """
