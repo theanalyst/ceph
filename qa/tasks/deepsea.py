@@ -1436,6 +1436,7 @@ class Policy(DeepSea):
             self._build_x('rgw')
             self._build_x('igw')
             self._build_x('ganesha')
+            self._build_x('openattic')
             self._build_storage_profile()
             self._write_policy_cfg()
             self._cat_policy_cfg()
