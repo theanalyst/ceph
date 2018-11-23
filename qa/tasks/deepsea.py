@@ -1887,7 +1887,6 @@ class Validation(DeepSea):
         self.name = 'deepsea.validation'
         super(Validation, self).__init__(ctx, config)
         self._apply_config_default("ceph_version_sanity", None)
-        self._apply_config_default("rados_striper", None)
         self._apply_config_default("systemd_units_active", None)
 
     def _apply_config_default(self, validation_test, default_config):
@@ -1898,22 +1897,6 @@ class Validation(DeepSea):
 
     def ceph_version_sanity(self, **kwargs):
         self.scripts.ceph_version_sanity()
-
-    def rados_striper(self, **kwargs):
-        """
-        Verify that rados does not has the --striper option
-        """
-        cmd_str = 'sudo rados --striper 2>&1 || true'
-        output = self.master_remote.sh(cmd_str)
-        os_type = self.ctx.config.get('os_type', 'unknown')
-        self.log.info("Checking for expected output on OS ->{}<-".format(os_type))
-        if os_type == 'sle':
-            assert 'unrecognized command --striper' in output, \
-                "ceph is compiled without libradosstriper"
-        else:
-            assert '--striper' not in output, \
-                "ceph is compiled with libradosstriper"
-        self.log.info("OK")
 
     def rados_write_test(self, **kwargs):
         self.scripts.rados_write_test()
