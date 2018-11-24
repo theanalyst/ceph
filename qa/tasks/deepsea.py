@@ -1786,7 +1786,7 @@ echo "OK" >/dev/null
         "enable_targetcli_debug_logging": """# Enable targetcli debug logging
 set -ex
 zypper --non-interactive --no-gpg-checks install \
-    --force --no-recommends targetcli-rbd
+    --force --no-recommends targetcli
 targetcli / set global loglevel_file=debug
 """,
         "iscsi_smoke_test": """# iSCSI Gateway smoke test
