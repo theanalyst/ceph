@@ -1,0 +1,14 @@
+roles:
+        - [client.salt_master, mon.a, mgr.x, osd.0, mds.0]
+        - [mon.b, mgr.y, osd.0, mds.1]
+        - [mon.c, mgr.z, osd.0, rgw.0]
+        - [openattic.0, client.0]
+
+tasks:
+        - deepsea.orch:
+                stage: 4
+        - exec:
+                client.salt_master:
+                        - 'ceph -s'
+        - deepsea.validation:
+                openattic_smoke_test:

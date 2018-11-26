@@ -1,5 +1,0 @@
-overrides:
-  deepsea:
-    exec:
-    - suites/basic/health-rgw.sh --cli || true
-    - sleep 10000000
