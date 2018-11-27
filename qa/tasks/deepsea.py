@@ -1102,7 +1102,10 @@ class Orch(DeepSea):
         igw_host = self.role_type_present("igw")
         if igw_host:
             igw_remote = self.remotes[igw_host]
-            self.scripts.enable_targetcli_debug_logging(igw_remote)
+            self.scripts.run(
+                igw_remote,
+                'enable_targetcli_debug_logging.sh',
+                )
         self.__log_stage_start(stage)
         self._run_orch(("stage", stage))
         self.__maybe_cat_ganesha_conf()
@@ -1495,13 +1498,19 @@ class Validation(DeepSea):
         igw_host = self.role_type_present("igw")
         if igw_host:
             remote = self.remotes[igw_host]
-            self.scripts.iscsi_smoke_test(remote)
+            self.scripts.run(
+                remote,
+                'iscsi_smoke_test.sh',
+                )
 
     def openattic_smoke_test(self, **kwargs):
         oa_host = self.role_type_present("openattic")
         if oa_host:
             remote = self.remotes[oa_host]
-            self.scripts.openattic_smoke_test(remote)
+            self.scripts.run(
+                remote,
+                'openattic_smoke_test.sh',
+                )
 
     def rados_write_test(self, **kwargs):
         self.scripts.run(
