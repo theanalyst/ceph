@@ -8,9 +8,12 @@ import logging
 import yaml
 
 from salt_manager import SaltManager
+from scripts import Scripts
 from util import (
     copy_directory_recursively,
     get_remote_for_role,
+    introspect_roles,
+    remote_run_script_as_root,
     sudo_append_to_file,
     )
 
@@ -34,6 +37,7 @@ proposals_dir = "/srv/pillar/ceph/proposals"
 
 
 def anchored(log_message):
+    global deepsea_ctx
     assert 'log_anchor' in deepsea_ctx, "deepsea_ctx not populated"
     return "{}{}".format(deepsea_ctx['log_anchor'], log_message)
 
@@ -82,19 +86,6 @@ def remote_exec(remote, cmd_str, log_spec, quiet=True, rerun=False, tries=0):
                 if tries < 1:
                     raise
                 log.warning("No connection established yet..")
-
-
-def remote_run_script_as_root(remote, path, data, args=None):
-    """
-    Wrapper around write_file to simplify the design pattern:
-    1. use write_file to create bash script on the remote
-    2. use Remote.run to run that bash script via "sudo bash $SCRIPT"
-    """
-    write_file(remote, path, data)
-    cmd = 'sudo bash {}'.format(path)
-    if args:
-        cmd += ' ' + ' '.join(args)
-    remote.run(label=path, args=cmd)
 
 
 class DeepSea(Task):
@@ -160,38 +151,36 @@ class DeepSea(Task):
     log_anchor_str = "WWWW: "
 
     def __init__(self, ctx, config):
+        global deepsea_ctx
         super(DeepSea, self).__init__(ctx, config)
         if deepsea_ctx:
             self.log = deepsea_ctx['logger_obj']
-            self.log.debug(
-                "deepsea_ctx already populated (we are in a subtask)")
+            # self.log.debug("context already populated (we are in a subtask)")
         if not deepsea_ctx:
             deepsea_ctx['logger_obj'] = log
+            self.ctx['roles'] = self.ctx.config['roles']
             self.log = log
-            self.log.debug(
-                "populating deepsea_ctx (we are *not* in a subtask)")
+            # self.log.debug("populating context (we are *not* in a subtask)")
             self._populate_deepsea_context()
+            introspect_roles(self.ctx, self.log, quiet=False)
         self.alternative_defaults = deepsea_ctx['alternative_defaults']
-        self.client_only_nodes = deepsea_ctx['client_only_nodes']
-        self.cluster_nodes = deepsea_ctx['cluster_nodes']
         self.dashboard_ssl = deepsea_ctx['dashboard_ssl']
         self.deepsea_cli = deepsea_ctx['cli']
-        self.dev_env = deepsea_ctx['dev_env']
-        self.gateway_nodes = deepsea_ctx['gateway_nodes']
+        self.dev_env = self.ctx['dev_env']
         self.log_anchor = deepsea_ctx['log_anchor']
         self.master_remote = deepsea_ctx['master_remote']
-        self.nodes = deepsea_ctx['nodes']
+        self.nodes = self.ctx['nodes']
+        self.nodes_storage = self.ctx['nodes_storage']
+        self.nodes_storage_only = self.ctx['nodes_storage_only']
         self.quiet_salt = deepsea_ctx['quiet_salt']
+        self.remotes = self.ctx['remotes']
         self.rgw_ssl = deepsea_ctx['rgw_ssl']
-        self.roles = deepsea_ctx['roles']
-        self.role_types = deepsea_ctx['role_types']
-        self.role_lookup_table = deepsea_ctx['role_lookup_table']
-        self.remotes = deepsea_ctx['remotes']
-        self.scripts = Scripts(self.master_remote, deepsea_ctx['logger_obj'])
+        self.roles = self.ctx['roles']
+        self.role_types = self.ctx['role_types']
+        self.role_lookup_table = self.ctx['role_lookup_table']
+        self.scripts = Scripts(self.ctx, self.log)
         self.sm = deepsea_ctx['salt_manager_instance']
         self.storage_profile = deepsea_ctx['storage_profile']
-        self.storage_nodes = deepsea_ctx['storage_nodes']
-        self.storage_only_nodes = deepsea_ctx['storage_only_nodes']
         # self.log.debug("ctx.config {}".format(ctx.config))
         # self.log.debug("deepsea context: {}".format(deepsea_ctx))
 
@@ -319,6 +308,7 @@ class DeepSea(Task):
             ])
 
     def _install_deepsea(self):
+        global deepsea_ctx
         install_method = deepsea_ctx['install_method']
         if install_method == 'package':
             self.__install_deepsea_using_zypper()
@@ -327,148 +317,6 @@ class DeepSea(Task):
         else:
             raise ConfigError(self.err_prefix + "internal error")
         deepsea_ctx['deepsea_installed'] = True
-
-    def _introspect_roles(self, deepsea_ctx):
-        """
-        Creates the following keys in deepsea_ctx:
-
-            nodes,
-            cluster_nodes,
-            gateway_nodes,
-            storage_nodes, and
-            client_only_nodes.
-
-        These are all simple lists of hostnames.
-
-        Also creates
-
-            remotes,
-
-        which is a dict of teuthology "remote" objects, which look like this:
-
-            { remote1_name: remote1_obj, ..., remoten_name: remoten_obj }
-
-        Also creates
-
-            role_types
-
-        which is just like the "roles" list, except it contains only unique
-        role types per node.
-
-        Finally, creates:
-
-            role_lookup_table
-
-        which will look something like this:
-
-            {
-                "osd": { "osd.0": osd0remname, ..., "osd.n": osdnremname },
-                "mon": { "mon.a": monaremname, ..., "mon.n": monnremname },
-                ...
-            }
-
-        and
-
-            remote_lookup_table
-
-        which looks like this:
-
-            {
-                remote0name: [ "osd.0", "client.0" ],
-                ...
-                remotenname: [ remotenrole0, ..., remotenrole99 ],
-            }
-
-        (In other words, remote_lookup_table is just like the roles
-        stanza, except the role lists are keyed by remote name.)
-        """
-        # initialization phase
-        cluster_roles = ['mon', 'mgr', 'osd', 'mds']
-        non_storage_cluster_roles = ['mon', 'mgr', 'mds']
-        gateway_roles = ['rgw', 'igw', 'ganesha']
-        d_ctx = deepsea_ctx
-        roles = d_ctx['roles']
-        nodes = []
-        cluster_nodes = []
-        non_storage_cluster_nodes = []
-        gateway_nodes = []
-        storage_nodes = []
-        storage_only_nodes = []
-        client_only_nodes = []
-        remotes = {}
-        role_types = []
-        role_lookup_table = {}
-        remote_lookup_table = {}
-        # introspection phase
-        idx = 0
-        for node_roles_list in roles:
-            assert isinstance(node_roles_list, list), \
-                "node_roles_list is a list"
-            assert node_roles_list, "node_roles_list is not empty"
-            remote = get_remote_for_role(self.ctx, node_roles_list[0])
-            role_types.append([])
-            self.log.debug("Considering remote name {}, hostname {}"
-                           .format(remote.name, remote.hostname))
-            nodes += [remote.hostname]
-            remotes[remote.hostname] = remote
-            remote_lookup_table[remote.hostname] = node_roles_list
-            # inner loop: roles (something like "osd.1" or "c2.mon.a")
-            for role in node_roles_list:
-                # FIXME: support multiple clusters as used in, e.g.,
-                # rgw/multisite suite
-                role_arr = role.split('.')
-                if len(role_arr) != 2:
-                    raise ConfigError(self.err_prefix + "Unsupported role ->{}<-"
-                                      .format(role))
-                (role_type, _) = role_arr
-                if role_type not in role_lookup_table:
-                    role_lookup_table[role_type] = {}
-                role_lookup_table[role_type][role] = remote.hostname
-                if role_type in cluster_roles:
-                    cluster_nodes += [remote.hostname]
-                if role_type in gateway_roles:
-                    gateway_nodes += [remote.hostname]
-                if role_type in non_storage_cluster_roles:
-                    non_storage_cluster_nodes += [remote.hostname]
-                if role_type == 'osd':
-                    storage_nodes += [remote.hostname]
-                if role_type not in role_types[idx]:
-                    role_types[idx] += [role_type]
-            idx += 1
-        cluster_nodes = list(set(cluster_nodes))
-        gateway_nodes = list(set(gateway_nodes))
-        storage_nodes = list(set(storage_nodes))
-        storage_only_nodes = []
-        for node in storage_nodes:
-            if node not in non_storage_cluster_nodes:
-                if node not in gateway_nodes:
-                    storage_only_nodes += [node]
-        client_only_nodes = list(
-            set(nodes).difference(set(cluster_nodes).union(set(gateway_nodes)))
-            )
-        self.log.debug(
-            "client_only_nodes is ->{}<-".format(client_only_nodes)
-            )
-        assign_vars = [
-            'client_only_nodes',
-            'cluster_nodes',
-            'gateway_nodes',
-            'nodes',
-            'remote_lookup_table',
-            'remotes',
-            'role_lookup_table',
-            'role_types',
-            'storage_nodes',
-            'storage_only_nodes',
-            ]
-        for var in assign_vars:
-            exec("deepsea_ctx['{var}'] = {var}".format(var=var))
-        deepsea_ctx['dev_env'] = True if len(cluster_nodes) < 4 else False
-        # report phase
-        self.log.info("ROLE INTROSPECTION REPORT")
-        report_vars = ['roles'] + assign_vars + ['dev_env']
-        for var in report_vars:
-            self.log.info("{} == {}".format(var, deepsea_ctx[var]))
 
     def _master_python_version(self, py_version):
         """
@@ -514,7 +362,7 @@ class DeepSea(Task):
         dump_file_that_might_not_exist(self.master_remote, global_yml)
 
     def _populate_deepsea_context(self):
-        deepsea_ctx['roles'] = self.ctx.config['roles']
+        global deepsea_ctx
         deepsea_ctx['alternative_defaults'] = self.config.get('alternative_defaults', {})
         if not isinstance(deepsea_ctx['alternative_defaults'], dict):
             raise ConfigError(self.err_prefix + "alternative_defaults must be a dict")
@@ -535,7 +383,6 @@ class DeepSea(Task):
                 deepsea_ctx['salt_manager_instance'].master_remote
                 )
         deepsea_ctx['rgw_ssl'] = self.config.get('rgw_ssl', False)
-        self._introspect_roles(deepsea_ctx)
         if 'install' in self.config:
             if self.config['install'] in ['package', 'pkg']:
                 deepsea_ctx['install_method'] = 'package'
@@ -574,10 +421,15 @@ class DeepSea(Task):
                 _remote.run(args=['sudo', 'sh', '-c', for_loop.format(pn=pn)])
 
     def first_storage_only_node(self):
-        if self.storage_only_nodes:
-            return self.storage_only_nodes[0]
+        if self.nodes_storage_only:
+            return self.nodes_storage_only[0]
         else:
             return None
+
+    def os_type_and_version(self):
+        os_type = self.ctx.config.get('os_type', 'unknown')
+        os_version = float(self.ctx.config.get('os_version', 0))
+        return (os_type, os_version)
 
     def reboot_the_cluster_now(self, log_spec=None):
         if not log_spec:
@@ -630,6 +482,7 @@ class DeepSea(Task):
         # self.log.debug("end of setup method")
 
     def begin(self):
+        global deepsea_ctx
         super(DeepSea, self).begin()
         self.sm.master_rpm_q('ceph')
         self.sm.master_rpm_q('ceph-test')
@@ -671,11 +524,11 @@ class DeepSea(Task):
     def teardown(self):
         self.log.debug("beginning of teardown method")
         super(DeepSea, self).teardown()
-        #
-        # the install task does "rm -r /var/lib/ceph" on every test node,
-        # and that fails when there are OSDs running
-        # FIXME - deprecated, remove after awhile
-        self._purge_osds()
+        # #
+        # # the install task does "rm -r /var/lib/ceph" on every test node,
+        # # and that fails when there are OSDs running
+        # # FIXME - deprecated, remove after awhile
+        # self._purge_osds()
         self.log.debug("end of teardown method")
 
 
@@ -718,6 +571,7 @@ class CephConf(DeepSea):
         }
 
     def __init__(self, ctx, config):
+        global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('ceph_conf')
         self.name = 'deepsea.ceph_conf'
         super(CephConf, self).__init__(ctx, config)
@@ -792,7 +646,7 @@ class CephConf(DeepSea):
         """
         Apply necessary ceph.conf for small clusters
         """
-        storage_nodes = len(self.storage_nodes)
+        storage_nodes = len(self.nodes_storage)
         info_msg = (
             "adjusted ceph.conf for operation with {} storage node(s)"
             .format(storage_nodes)
@@ -836,6 +690,7 @@ class CreatePools(DeepSea):
     err_prefix = "(create_pools subtask) "
 
     def __init__(self, ctx, config):
+        global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('create_pools')
         self.name = 'deepsea.create_pools'
         super(CreatePools, self).__init__(ctx, config)
@@ -851,7 +706,11 @@ class CreatePools(DeepSea):
             if self.config[key]:
                 args.append(key)
         args = list(set(args))
-        self.scripts.create_all_pools_at_once(*args)
+        self.scripts.run(
+            self.master_remote,
+            'create_all_pools_at_once.sh',
+            args=args,
+            )
 
     def end(self):
         pass
@@ -863,6 +722,7 @@ class CreatePools(DeepSea):
 class Dummy(DeepSea):
 
     def __init__(self, ctx, config):
+        global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('dummy')
         self.name = 'deepsea.dummy'
         super(Dummy, self).__init__(ctx, config)
@@ -870,6 +730,7 @@ class Dummy(DeepSea):
 
     def begin(self):
         self.log.debug("beginning of begin method")
+        global deepsea_ctx
         self.log.info("deepsea_ctx == {}".format(deepsea_ctx))
         self.log.debug("end of begin method")
 
@@ -898,6 +759,7 @@ class HealthOK(DeepSea):
     prefix = 'health-ok/'
 
     def __init__(self, ctx, config):
+        global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('health_ok')
         self.name = 'deepsea.health_ok'
         super(HealthOK, self).__init__(ctx, config)
@@ -906,6 +768,7 @@ class HealthOK(DeepSea):
         """
         Copy health-ok.sh from teuthology VM to master_remote
         """
+        global deepsea_ctx
         suite_path = self.ctx.config.get('suite_path')
         log.info("suite_path is ->{}<-".format(suite_path))
         sh("ls -l {}".format(suite_path))
@@ -942,6 +805,7 @@ class HealthOK(DeepSea):
                 ])
 
     def setup(self):
+        global deepsea_ctx
         if 'health_ok_copied' not in deepsea_ctx:
             self._copy_health_ok()
             assert deepsea_ctx['health_ok_copied']
@@ -979,6 +843,7 @@ class Orch(DeepSea):
         }
 
     def __init__(self, ctx, config):
+        global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('orch')
         self.name = 'deepsea.orch'
         super(Orch, self).__init__(ctx, config)
@@ -1013,7 +878,10 @@ class Orch(DeepSea):
         except CommandFailedError:
             self.master_remote.run(args=base_cmd.format('100', 'salt-api'))
             raise
-        self.scripts.salt_api_test()
+        self.scripts.run(
+            self.master_remote,
+            'salt_api_test.sh',
+            )
 
     def __is_stage_between_0_and_5(self):
         """
@@ -1037,7 +905,7 @@ class Orch(DeepSea):
             ))
 
     def __lsblk_and_ceph_disk_list(self):
-        for osd_host in self.storage_nodes:
+        for osd_host in self.nodes_storage:
             remote = self.remotes[osd_host]
             cmd = ('set -ex\n'
                    'lsblk\n'
@@ -1076,9 +944,15 @@ class Orch(DeepSea):
                 "detected rgw host ->{}<-".format(rgw_host)
                 )
             self.log.info(anchored("configuring RGW"))
-            self.scripts.rgw_init()
+            self.scripts.run(
+                self.master_remote,
+                'rgw_init.sh',
+                )
             if self.rgw_ssl:
-                self.scripts.rgw_init_ssl()
+                self.scripts.run(
+                    self.master_remote,
+                    'rgw_init_ssl.sh',
+                    )
 
     def _nfs_ganesha_no_root_squash(self):
         self.log.info("NFS-Ganesha set No_root_squash")
@@ -1213,7 +1087,10 @@ class Orch(DeepSea):
             abort_on_fail=False
             )
         self.__lsblk_and_ceph_disk_list()
-        self.scripts.ceph_cluster_status()
+        self.scripts.run(
+            self.master_remote,
+            'ceph_cluster_status.sh',
+            )
         self.__ceph_health_test()
 
     def _run_stage_4(self):
@@ -1226,7 +1103,10 @@ class Orch(DeepSea):
         igw_host = self.role_type_present("igw")
         if igw_host:
             igw_remote = self.remotes[igw_host]
-            self.scripts.enable_targetcli_debug_logging(igw_remote)
+            self.scripts.run(
+                igw_remote,
+                'enable_targetcli_debug_logging.sh',
+                )
         self.__log_stage_start(stage)
         self._run_orch(("stage", stage))
         self.__maybe_cat_ganesha_conf()
@@ -1290,6 +1170,7 @@ class Policy(DeepSea):
     err_prefix = "(policy subtask) "
 
     def __init__(self, ctx, config):
+        global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('policy')
         self.name = 'deepsea.policy'
         super(Policy, self).__init__(ctx, config)
@@ -1297,15 +1178,15 @@ class Policy(DeepSea):
         self.munge_profile = self.config.get('munge_profile', {})
 
     def __build_profile_x(self, profile):
-        if not self.storage_nodes:
+        if not self.nodes_storage:
             raise ConfigError(self.err_prefix + "no osd roles configured, "
                               "but at least one of these is required.")
         self.log.debug("building storage profile ->{}<- for {} storage nodes"
-                       .format(profile, len(self.storage_nodes)))
+                       .format(profile, len(self.nodes_storage)))
         if profile == 'custom':
             self.__roll_out_custom_profile()
         self.profile_ymls_to_dump = []
-        for hostname in self.storage_nodes:
+        for hostname in self.nodes_storage:
             self.policy_cfg += ("# Storage profile - {node}\n"
                                 "profile-{profile}/cluster/{node}.sls\n"
                                 .format(node=hostname, profile=profile))
@@ -1322,7 +1203,11 @@ class Policy(DeepSea):
             yaml.dump(self.storage_profile),
             perms="0644",
             )
-        self.scripts.custom_storage_profile(fpath)
+        self.scripts.run(
+            self.master_remote,
+            'custom_storage_profile.sh',
+            args=[proposals_dir, fpath]
+            )
 
     def _build_base(self):
         """
@@ -1436,9 +1321,10 @@ class Policy(DeepSea):
                             self.err_prefix + "proposals_remove_storage_only_node "
                             "requires a storage-only node, but there is no such"
                             )
-                    self.scripts.proposals_remove_storage_only_node(
-                        delete_me,
-                        self.storage_profile
+                    self.scripts.run(
+                        self.master_remote,
+                        'proposals_remove_storage_only_node.sh',
+                        args=[proposals_dir, delete_me, self.storage_profile],
                         )
                 else:
                     raise ConfigError(self.err_prefix + "unrecognized "
@@ -1471,6 +1357,7 @@ class Reboot(DeepSea):
     A class that does nothing but unconditionally reboot the whole cluster.
     """
     def __init__(self, ctx, config):
+        global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('reboot')
         self.name = 'deepsea.reboot'
         super(Reboot, self).__init__(ctx, config)
@@ -1489,33 +1376,33 @@ class Reboot(DeepSea):
 
 class Script(DeepSea):
     """
-    A class that runs a list of canned bash scripts
+    A class that runs a bash script on the node with given role, or on all nodes.
 
-    Example:
+    Example 1 (run foo_bar.sh, with arguments, on Salt Master node):
 
     tasks:
         - deepsea.script:
-              do_something_nice:
-                  args:
-                      - 'foo'
-                      - 'bar'
+              client.salt_master:
+                  foo_bar.sh:
+                      args:
+                          - 'foo'
+                          - 'bar'
+
+    Example 2 (run foo_bar.sh, with no arguments, on all test nodes)
+
+    tasks:
+        - deepsea.script:
+              all:
+                  foo_bar.sh:
     """
 
     err_prefix = '(script subtask) '
 
     def __init__(self, ctx, config):
+        global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('script')
         self.name = 'deepsea.script'
         super(Script, self).__init__(ctx, config)
-
-    def _run_script(self, script, args=[]):
-        kwargs = {'cli': self.deepsea_cli}
-        method = getattr(self.scripts, script, None)
-        if method:
-            method(*args, **kwargs)
-        else:
-            raise ConfigError(self.err_prefix + "No such canned script ->{}<-"
-                              .format(method))
 
     def begin(self):
         if not self.config:
@@ -1526,9 +1413,21 @@ class Script(DeepSea):
             raise ConfigError(
                 self.err_prefix +
                 "config dictionary may contain only one key. "
-                "You provided ->{}<- keys".format(config_keys)
+                "You provided ->{}<- keys ({}}".format(len(config_keys), config_keys)
                 )
-        script, script_dict = self.config.items()[0]
+        role_spec, role_dict = self.config.items()[0]
+        role_keys = len(role_dict)
+        if role_keys > 1:
+            raise ConfigError(
+                self.err_prefix +
+                "role dictionary may contain only one key. "
+                "You provided ->{}<- keys ({}}".format(len(role_keys), role_keys)
+                )
+        if role_spec == "all":
+            remote = self.ctx.cluster
+        else:
+            remote = get_remote_for_role(self.ctx, role_spec)
+        script_spec, script_dict = role_dict.items()[0]
         if script_dict is None:
             args = []
         if isinstance(script_dict, dict):
@@ -1540,7 +1439,11 @@ class Script(DeepSea):
             args = script_dict.values()[0] or []
             if not isinstance(args, list):
                 raise ConfigError(self.err_prefix + 'script args must be a list')
-        self._run_script(script, args=args)
+        self.scripts.run(
+            remote,
+            script_spec,
+            args=args
+            )
 
     def end(self):
         pass
@@ -1549,420 +1452,69 @@ class Script(DeepSea):
         pass
 
 
-class Scripts:
+class State(DeepSea):
+    """
+    Runs an arbitrary Salt State on some minions.
 
-    script_dict = {
-        "ceph_cluster_status": """# Display ceph cluster status
-set -ex
-ceph pg stat -f json-pretty
-ceph health detail -f json-pretty
-ceph osd tree
-ceph osd pool ls detail -f json-pretty
-ceph -s
-""",
-        "create_all_pools_at_once": """# Pre-create Stage 4 pools
-# with calculated number of PGs so we don't get health warnings
-# during/after Stage 4 due to "too few" or "too many" PGs per OSD
-set -ex
-#
-function json_total_osds {
-    # total number of OSDs in the cluster
-    ceph osd ls --format json | jq '. | length'
-}
-#
-function pgs_per_pool {
-    local TOTALPOOLS=$1
-    test -n "$TOTALPOOLS"
-    local TOTALOSDS=$(json_total_osds)
-    test -n "$TOTALOSDS"
-    # given the total number of pools and OSDs,
-    # assume triple replication and equal number of PGs per pool
-    # and aim for 100 PGs per OSD
-    let "TOTALPGS = $TOTALOSDS * 100"
-    let "PGSPEROSD = $TOTALPGS / $TOTALPOOLS / 3"
-    echo $PGSPEROSD
-}
-#
-function create_all_pools_at_once {
-    # sample usage: create_all_pools_at_once foo bar
-    local TOTALPOOLS="${#@}"
-    local PGSPERPOOL=$(pgs_per_pool $TOTALPOOLS)
-    for POOLNAME in "$@"
-    do
-        ceph osd pool create $POOLNAME $PGSPERPOOL $PGSPERPOOL replicated
-    done
-    ceph osd pool ls detail
-}
-#
-CEPHFS=""
-OPENSTACK=""
-RBD=""
-OTHER=""
-for arg in "$@" ; do
-    arg="${arg,,}"
-    case "$arg" in
-        cephfs) CEPHFS="$arg" ;;
-        openstack) OPENSTACK="$arg" ;;
-        rbd) RBD="$arg" ;;
-        *) OTHER+=" $arg" ;;
-    esac
-done
-#
-POOLS=""
-if [ $CEPHFS ] ; then
-    POOLS+=" cephfs_data cephfs_metadata"
-fi
-if [ "$OPENSTACK" ] ; then
-    POOLS+=" smoketest-cloud-backups smoketest-cloud-volumes smoketest-cloud-images"
-    POOLS+=" smoketest-cloud-vms cloud-backups cloud-volumes cloud-images cloud-vms"
-fi
-if [ "$RBD" ] ; then
-    POOLS+=" rbd"
-fi
-if [ "$OTHER" ] ; then
-    POOLS+="$OTHER"
-    APPLICATION_ENABLE="$OTHER"
-fi
-if [ -z "$POOLS" ] ; then
-    echo "create_all_pools_at_once: bad arguments"
-    exit 1
-fi
-echo "About to create pools ->$POOLS<-"
-create_all_pools_at_once $POOLS
-if [ "$APPLICATION_ENABLE" ] ; then
-    for pool in "$APPLICATION_ENABLE" ; do
-        ceph osd pool application enable $pool deepsea_qa
-    done
-fi
-""",
-        "salt_api_test": """# Salt API test script
-set -e
-TMPFILE=$(mktemp)
-curl --silent http://$(hostname):8000/ | tee $TMPFILE # show curl output in log
-test -s $TMPFILE
-jq . $TMPFILE >/dev/null
-echo -en "\\n" # this is just for log readability
-rm $TMPFILE
-echo "Salt API test passed"
-""",
-        "rgw_init": """# Set up RGW
-set -ex
-USERSYML=/srv/salt/ceph/rgw/users/users.d/rgw.yml
-cat <<EOF > $USERSYML
-- { uid: "demo", name: "Demo", email: "demo@demo.nil" }
-- { uid: "demo1", name: "Demo1", email: "demo1@demo.nil" }
-EOF
-cat $USERSYML
-""",
-        "rgw_init_ssl": """# Set up RGW-over-SSL
-set -ex
-CERTDIR=/srv/salt/ceph/rgw/cert
-mkdir -p $CERTDIR
-pushd $CERTDIR
-openssl req -x509 \
-        -nodes \
-        -days 1095 \
-        -newkey rsa:4096 \
-        -keyout rgw.key \
-        -out rgw.crt \
-        -subj "/C=DE"
-cat rgw.key > rgw.pem && cat rgw.crt >> rgw.pem
-popd
-GLOBALYML=/srv/pillar/ceph/stack/global.yml
-cat <<EOF >> $GLOBALYML
-rgw_init: default-ssl
-EOF
-cat $GLOBALYML
-cp /srv/salt/ceph/configuration/files/rgw-ssl.conf \
-    /srv/salt/ceph/configuration/files/ceph.conf.d/rgw.conf
-""",
-        "proposals_remove_storage_only_node": """# remove first storage-only node from proposals
-set -ex
-PROPOSALSDIR=$1
-STORAGE_PROFILE=$2
-NODE_TO_DELETE=$3
-#
-echo "Before"
-ls -1 $PROPOSALSDIR/profile-$STORAGE_PROFILE/cluster/
-ls -1 $PROPOSALSDIR/profile-$STORAGE_PROFILE/stack/default/ceph/minions/
-#
-basedirsls=$PROPOSALSDIR/profile-$STORAGE_PROFILE/cluster
-basediryml=$PROPOSALSDIR/profile-$STORAGE_PROFILE/stack/default/ceph/minions
-mv $basedirsls/${NODE_TO_DELETE}.sls $basedirsls/${NODE_TO_DELETE}.sls-DISABLED
-mv $basediryml/${NODE_TO_DELETE}.yml $basedirsls/${NODE_TO_DELETE}.yml-DISABLED
-#
-echo "After"
-ls -1 $PROPOSALSDIR/profile-$STORAGE_PROFILE/cluster/
-ls -1 $PROPOSALSDIR/profile-$STORAGE_PROFILE/stack/default/ceph/minions/
-""",
-        "remove_storage_only_node": """# actually remove the node
-set -ex
-CLI=$1
-function number_of_hosts_in_ceph_osd_tree {
-    ceph osd tree -f json-pretty | jq '[.nodes[] | select(.type == "host")] | length'
-}
-#
-function number_of_osds_in_ceph_osd_tree {
-    ceph osd tree -f json-pretty | jq '[.nodes[] | select(.type == "osd")] | length'
-}
-#
-function run_stage {
-    local stage_num=$1
-    if [ "$CLI" ] ; then
-        timeout 60m deepsea \
-            --log-file=/var/log/salt/deepsea.log \
-            --log-level=debug \
-            salt-run state.orch ceph.stage.$stage_num \
-            --simple-output
-    else
-        timeout 60m salt-run \
-            state.orch ceph.stage.$stage_num \
-            2> /dev/null
-    fi
-}
-#
-STORAGE_NODES_BEFORE=$(number_of_hosts_in_ceph_osd_tree)
-OSDS_BEFORE=$(number_of_osds_in_ceph_osd_tree)
-test "$STORAGE_NODES_BEFORE"
-test "$OSDS_BEFORE"
-test "$STORAGE_NODES_BEFORE" -gt 1
-test "$OSDS_BEFORE" -gt 0
-#
-run_stage 2
-ceph -s
-run_stage 5
-ceph -s
-#
-STORAGE_NODES_AFTER=$(number_of_hosts_in_ceph_osd_tree)
-OSDS_AFTER=$(number_of_osds_in_ceph_osd_tree)
-test "$STORAGE_NODES_BEFORE"
-test "$OSDS_BEFORE"
-test "$STORAGE_NODES_AFTER" -eq "$((STORAGE_NODES_BEFORE - 1))"
-test "$OSDS_AFTER" -lt "$OSDS_BEFORE"
-""",
-        "custom_storage_profile": """# custom storage profile
-set -ex
-PROPOSALSDIR=$1
-SOURCEFILE=$2
-#
-function _initialize_minion_configs_array {
-    local DIR=$1
+    This subtask understands the following config keys:
 
-    shopt -s nullglob
-    pushd $DIR >/dev/null
-    MINION_CONFIGS_ARRAY=(*.yaml *.yml)
-    echo "Made global array containing the following files (from ->$DIR<-):"
-    printf '%s\n' "${MINION_CONFIGS_ARRAY[@]}"
-    popd >/dev/null
-    shopt -u nullglob
-}
-#
-test -f "$SOURCEFILE"
-file $SOURCEFILE
-#
-# prepare new profile, which will be exactly the same as the default
-# profile except the files in stack/default/ceph/minions/ will be
-# overwritten with our chosen OSD configuration
-#
-cp -a $PROPOSALSDIR/profile-default $PROPOSALSDIR/profile-custom
-DESTDIR="$PROPOSALSDIR/profile-custom/stack/default/ceph/minions"
-_initialize_minion_configs_array $DESTDIR
-for DESTFILE in "${MINION_CONFIGS_ARRAY[@]}" ; do
-    cp $SOURCEFILE $DESTDIR/$DESTFILE
-done
-echo "Your custom storage profile $SOURCEFILE has the following contents:"
-cat $DESTDIR/$DESTFILE
-ls -lR $PROPOSALSDIR/profile-custom
-""",
-        "ceph_version_sanity": """# Ceph version sanity test
-# test that ceph RPM version matches "ceph --version"
-# for a loose definition of "matches"
-set -ex
-rpm -q ceph
-RPM_NAME=$(rpm -q ceph)
-RPM_CEPH_VERSION=$(perl -e '"'"$RPM_NAME"'" =~ m/ceph-(\d+\.\d+\.\d+)/; print "$1\n";')
-echo "According to RPM, the ceph upstream version is ->$RPM_CEPH_VERSION<-" >/dev/null
-test -n "$RPM_CEPH_VERSION"
-ceph --version
-BUFFER=$(ceph --version)
-CEPH_CEPH_VERSION=$(perl -e '"'"$BUFFER"'" =~ m/ceph version (\d+\.\d+\.\d+)/; print "$1\n";')
-echo "According to \"ceph --version\", the ceph upstream version is ->$CEPH_CEPH_VERSION<-" \
-    >/dev/null
-test -n "$RPM_CEPH_VERSION"
-test "$RPM_CEPH_VERSION" = "$CEPH_CEPH_VERSION"
-""",
-        "rados_write_test": """# Write a RADOS object and read it back
-#
-# NOTE: function assumes the pool "write_test" already exists. Pool can be
-# created by calling e.g. "create_all_pools_at_once write_test" immediately
-# before calling this function.
-#
-set -ex
-ceph osd pool application enable write_test deepsea_qa
-echo "dummy_content" > verify.txt
-rados -p write_test put test_object verify.txt
-rados -p write_test get test_object verify_returned.txt
-test "x$(cat verify.txt)" = "x$(cat verify_returned.txt)"
-""",
-        "openattic_smoke_test": """# openATTIC smoke test
-set -ex
-systemctl status --full --lines=0 apache2.service
-ss --tcp --numeric state listening
-echo "OK" >/dev/null
-""",
-        "enable_targetcli_debug_logging": """# Enable targetcli debug logging
-set -ex
-zypper --non-interactive --no-gpg-checks install \
-    --force --no-recommends targetcli
-targetcli / set global loglevel_file=debug
-""",
-        "iscsi_smoke_test": """# iSCSI Gateway smoke test
-set -x
-rpm -q lrbd
-lrbd --output
-ls -lR /sys/kernel/config/target/
-ss --tcp --numeric state listening
-echo "See 3260 there?"
-set -e
-zypper --non-interactive --no-gpg-checks install \
-    --force --no-recommends open-iscsi
-systemctl start iscsid.service
-sleep 5
-systemctl --no-pager --full status iscsid.service
-iscsiadm -m discovery -t st -p $(hostname)
-iscsiadm -m node -L all
-sleep 5
-ls -l /dev/disk/by-path
-ls -l /dev/disk/by-*id
-if ( mkfs -t xfs /dev/disk/by-path/*iscsi* ) ; then
-    :
-else
-    dmesg
-    false
-fi
-test -d /mnt
-mount /dev/disk/by-path/*iscsi* /mnt
-df -h /mnt
-echo hubba > /mnt/bubba
-test -s /mnt/bubba
-umount /mnt
-iscsiadm -m node --logout
-echo "OK" >/dev/null
-"""
-        }
+        state    name of the state to run (mandatory)
 
-    def __init__(self, master_remote, logger):
-        self.log = logger
-        self.master_remote = master_remote
+        target   target selection specifier (default: *)
+                 For details, see "man salt"
+    """
 
-    def ceph_cluster_status(self, *args, **kwargs):
-        remote_run_script_as_root(
+    err_prefix = '(state subtask) '
+
+    def __init__(self, ctx, config):
+        deepsea_ctx['logger_obj'] = log.getChild('state')
+        super(State, self).__init__(ctx, config)
+        # cast stage/state_orch value to str because it might be a number
+        self.state = str(self.config.get("state", ''))
+        # targets all machines if omitted
+        self.target = str(self.config.get("target", '*'))
+        if not self.state:
+            raise ConfigError(
+                self.err_prefix + "nothing to do. Specify a non-empty value for 'state'")
+
+    def _run_state(self):
+        """Run a state. Dump journalctl on error."""
+        if '*' in self.target:
+            quoted_target = "\'{}\'".format(self.target)
+        else:
+            quoted_target = self.target
+        cmd_str = (
+            "set -ex\n"
+            "timeout 60m salt {} --no-color state.apply {}\n"
+            ).format(quoted_target, self.state)
+        if self.quiet_salt:
+            cmd_str += ' 2>/dev/null'
+        write_file(self.master_remote, 'run_salt_state.sh', cmd_str)
+        remote_exec(
             self.master_remote,
-            'ceph_cluster_status.sh',
-            self.script_dict["ceph_cluster_status"],
+            'sudo bash run_salt_state.sh',
+            "state {}".format(self.state),
             )
 
-    def ceph_version_sanity(self, *args, **kwargs):
-        remote_run_script_as_root(
-            self.master_remote,
-            'ceph_version_sanity.sh',
-            self.script_dict["ceph_version_sanity"],
-            )
+    def begin(self):
+        self.log.info(anchored("running state {}".format(self.state)))
+        self._run_state()
 
-    def create_all_pools_at_once(self, *args, **kwargs):
-        self.log.info("creating pools: {}".format(' '.join(args)))
-        remote_run_script_as_root(
-            self.master_remote,
-            'create_all_pools_at_once.sh',
-            self.script_dict["create_all_pools_at_once"],
-            args=args,
-            )
+    def end(self):
+        pass
 
-    def custom_storage_profile(self, *args, **kwargs):
-        sourcefile = args[0]
-        remote_run_script_as_root(
-            self.master_remote,
-            'custom_storage_profile.sh',
-            self.script_dict["custom_storage_profile"],
-            args=[proposals_dir, sourcefile],
-            )
-
-    def enable_targetcli_debug_logging(self, *args, **kwargs):
-        remote = args[0]
-        remote_run_script_as_root(
-            remote,
-            'enable_targetcli_debug_logging.sh',
-            self.script_dict["enable_targetcli_debug_logging"],
-            )
-
-    def iscsi_smoke_test(self, *args, **kwargs):
-        remote = args[0]
-        remote_run_script_as_root(
-            remote,
-            'iscsi_smoke_test.sh',
-            self.script_dict["iscsi_smoke_test"],
-            )
-
-    def openattic_smoke_test(self, *args, **kwargs):
-        remote = args[0]
-        remote_run_script_as_root(
-            remote,
-            'openattic_smoke_test.sh',
-            self.script_dict["openattic_smoke_test"],
-            )
-
-    def proposals_remove_storage_only_node(self, *args, **kwargs):
-        hostname = args[0]
-        storage_profile = args[1]
-        remote_run_script_as_root(
-            self.master_remote,
-            'proposals_remove_storage_only_node.sh',
-            self.script_dict["proposals_remove_storage_only_node"],
-            args=[proposals_dir, storage_profile, hostname],
-            )
-
-    def rados_write_test(self, *args, **kwargs):
-        remote_run_script_as_root(
-            self.master_remote,
-            'rados_write_test.sh',
-            self.script_dict["rados_write_test"],
-            )
-
-    def remove_storage_only_node(self, *args, **kwargs):
-        args = ['--cli'] if kwargs['cli'] else []
-        remote_run_script_as_root(
-            self.master_remote,
-            'remove_storage_only_node.sh',
-            self.script_dict["remove_storage_only_node"],
-            args=args,
-            )
-
-    def rgw_init(self, *args, **kwargs):
-        remote_run_script_as_root(
-            self.master_remote,
-            'rgw_init.sh',
-            self.script_dict["rgw_init"],
-            )
-
-    def rgw_init_ssl(self, *args, **kwargs):
-        remote_run_script_as_root(
-            self.master_remote,
-            'rgw_init_ssl.sh',
-            self.script_dict["rgw_init_ssl"],
-            )
-
-    def salt_api_test(self, *args, **kwargs):
-        remote_run_script_as_root(
-            self.master_remote,
-            'salt_api_test.sh',
-            self.script_dict["salt_api_test"],
-            )
+    def teardown(self):
+        pass
 
 
 class Validation(DeepSea):
     """
     A container for "validation tests", which are understood to mean tests that
     validate the Ceph cluster (just) deployed by DeepSea.
+
+    The tests implemented in this class should be small and not take long to
+    finish. Anything more involved should be implemented in a separate task
+    (see ses_qa.py for an example of such a task).
 
     The config YAML is a dictionary in which the keys are the names of tests
     (methods to be run) and the values are the config dictionaries of each test
@@ -1979,6 +1531,7 @@ class Validation(DeepSea):
     err_prefix = '(validation subtask) '
 
     def __init__(self, ctx, config):
+        global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('validation')
         self.name = 'deepsea.validation'
         super(Validation, self).__init__(ctx, config)
@@ -1992,22 +1545,34 @@ class Validation(DeepSea):
         self.config[validation_test] = self.config.get(validation_test, default_config)
 
     def ceph_version_sanity(self, **kwargs):
-        self.scripts.ceph_version_sanity()
+        self.scripts.run(
+            self.master_remote,
+            'ceph_version_sanity.sh',
+            )
 
     def iscsi_smoke_test(self, **kwargs):
         igw_host = self.role_type_present("igw")
         if igw_host:
             remote = self.remotes[igw_host]
-            self.scripts.iscsi_smoke_test(remote)
+            self.scripts.run(
+                remote,
+                'iscsi_smoke_test.sh',
+                )
 
     def openattic_smoke_test(self, **kwargs):
         oa_host = self.role_type_present("openattic")
         if oa_host:
             remote = self.remotes[oa_host]
-            self.scripts.openattic_smoke_test(remote)
+            self.scripts.run(
+                remote,
+                'openattic_smoke_test.sh',
+                )
 
     def rados_write_test(self, **kwargs):
-        self.scripts.rados_write_test()
+        self.scripts.run(
+            self.master_remote,
+            'rados_write_test.sh',
+            )
 
     def systemd_units_active(self, **kwargs):
         """
@@ -2083,4 +1648,5 @@ orch = Orch
 policy = Policy
 reboot = Reboot
 script = Script
+state = State
 validation = Validation
