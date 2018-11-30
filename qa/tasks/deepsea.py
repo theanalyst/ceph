@@ -9,31 +9,27 @@ import yaml
 
 from salt_manager import SaltManager
 from scripts import Scripts
+from teuthology import misc
 from util import (
     copy_directory_recursively,
     get_remote_for_role,
     introspect_roles,
+    remote_exec,
     remote_run_script_as_root,
     sudo_append_to_file,
     )
 
 from teuthology.exceptions import (
     CommandFailedError,
-    ConnectionLostError,
     ConfigError,
-    )
-from teuthology.misc import (
-    sh,
-    sudo_write_file,
-    write_file,
     )
 from teuthology.orchestra import run
 from teuthology.task import Task
-from teuthology.contextutil import safe_while
 
 log = logging.getLogger(__name__)
 deepsea_ctx = {}
 proposals_dir = "/srv/pillar/ceph/proposals"
+reboot_tries = 15
 
 
 def anchored(log_message):
@@ -47,45 +43,6 @@ def dump_file_that_might_not_exist(remote, fpath):
         remote.run(args="cat {}".format(fpath))
     except CommandFailedError:
         pass
-
-
-def remote_exec(remote, cmd_str, log_spec, quiet=True, rerun=False, tries=0):
-    """
-    Execute cmd_str and catch CommandFailedError and ConnectionLostError (and
-    rerun cmd_str post-reboot if rerun flag is set) until one of the conditons
-    are fulfilled:
-    1) Execution succeeded
-    2) Attempts are exceeded
-    3) CommandFailedError is raised
-    """
-    cmd_str = "sudo bash -c '{}'".format(cmd_str)
-    # if quiet:
-    #     cmd_args += [run.Raw('2>'), "/dev/null"]
-    already_rebooted_at_least_once = False
-    if tries:
-        remote.run(args="uptime")
-        log.info("Running command ->{}<- on {}. "
-                 "This might cause the machine to reboot!"
-                 .format(cmd_str, remote.hostname))
-    with safe_while(sleep=60, tries=tries, action="wait for reconnect") as proceed:
-        while proceed():
-            try:
-                if already_rebooted_at_least_once:
-                    if not rerun:
-                        remote.run(args="echo Back from reboot ; uptime")
-                        break
-                remote.run(args=cmd_str)
-                break
-            except CommandFailedError:
-                log.error(anchored("{} failed. Here comes journalctl!"
-                                   .format(log_spec)))
-                remote.run(args="sudo journalctl --all")
-                raise
-            except ConnectionLostError:
-                already_rebooted_at_least_once = True
-                if tries < 1:
-                    raise
-                log.warning("No connection established yet..")
 
 
 class DeepSea(Task):
@@ -167,6 +124,7 @@ class DeepSea(Task):
         self.dashboard_ssl = deepsea_ctx['dashboard_ssl']
         self.deepsea_cli = deepsea_ctx['cli']
         self.dev_env = self.ctx['dev_env']
+        self.install_method = deepsea_ctx['install_method']
         self.log_anchor = deepsea_ctx['log_anchor']
         self.master_remote = deepsea_ctx['master_remote']
         self.nodes = self.ctx['nodes']
@@ -174,6 +132,7 @@ class DeepSea(Task):
         self.nodes_storage_only = self.ctx['nodes_storage_only']
         self.quiet_salt = deepsea_ctx['quiet_salt']
         self.remotes = self.ctx['remotes']
+        self.repositories = deepsea_ctx['repositories']
         self.rgw_ssl = deepsea_ctx['rgw_ssl']
         self.roles = self.ctx['roles']
         self.role_types = self.ctx['role_types']
@@ -382,6 +341,7 @@ class DeepSea(Task):
         deepsea_ctx['master_remote'] = (
                 deepsea_ctx['salt_manager_instance'].master_remote
                 )
+        deepsea_ctx['repositories'] = self.config.get("repositories", None)
         deepsea_ctx['rgw_ssl'] = self.config.get('rgw_ssl', False)
         if 'install' in self.config:
             if self.config['install'] in ['package', 'pkg']:
@@ -431,7 +391,23 @@ class DeepSea(Task):
         os_version = float(self.ctx.config.get('os_version', 0))
         return (os_type, os_version)
 
+    def reboot_a_single_machine_now(self, remote, log_spec=None):
+        global reboot_tries
+        if not log_spec:
+            log_spec = "node {} reboot now".format(remote.hostname)
+        cmd_str = "sudo reboot"
+        remote_exec(
+            remote,
+            cmd_str,
+            self.log,
+            log_spec,
+            rerun=False,
+            quiet=True,
+            tries=reboot_tries,
+            )
+
     def reboot_the_cluster_now(self, log_spec=None):
+        global reboot_tries
         if not log_spec:
             log_spec = "all nodes reboot now"
         cmd_str = "salt \\* cmd.run reboot"
@@ -440,10 +416,11 @@ class DeepSea(Task):
         remote_exec(
             self.master_remote,
             cmd_str,
+            self.log,
             log_spec,
             rerun=False,
             quiet=True,
-            tries=5,
+            tries=reboot_tries,
             )
         self.sm.ping_minions()
 
@@ -771,9 +748,9 @@ class HealthOK(DeepSea):
         global deepsea_ctx
         suite_path = self.ctx.config.get('suite_path')
         log.info("suite_path is ->{}<-".format(suite_path))
-        sh("ls -l {}".format(suite_path))
+        misc.sh("ls -l {}".format(suite_path))
         health_ok_path = suite_path + "/deepsea/health-ok"
-        sh("test -d " + health_ok_path)
+        misc.sh("test -d " + health_ok_path)
         copy_directory_recursively(
                 health_ok_path, self.master_remote, "health-ok")
         self.master_remote.run(args="pwd ; ls -lR health-ok")
@@ -847,7 +824,6 @@ class Orch(DeepSea):
         deepsea_ctx['logger_obj'] = log.getChild('orch')
         self.name = 'deepsea.orch'
         super(Orch, self).__init__(ctx, config)
-        # cast stage/state_orch value to str because it might be a number
         self.stage = str(self.config.get("stage", ''))
         self.state_orch = str(self.config.get("state_orch", ''))
         self.reboots_explicitly_forbidden = not self.config.get("allow_reboots", True)
@@ -974,6 +950,7 @@ class Orch(DeepSea):
 
     def _run_orch(self, orch_tuple):
         """Run an orchestration. Dump journalctl on error."""
+        global reboot_tries
         orch_type, orch_spec = orch_tuple
         if orch_type == 'orch':
             pass
@@ -1003,10 +980,11 @@ class Orch(DeepSea):
             cmd_str = 'DEV_ENV=true ' + cmd_str
         tries = 0
         if self.survive_reboots:
-            tries = 5
+            tries = reboot_tries
         remote_exec(
             self.master_remote,
             cmd_str,
+            self.log,
             "orchestration {}".format(orch_spec),
             rerun=True,
             quiet=True,
@@ -1197,7 +1175,7 @@ class Policy(DeepSea):
                 "{}/{}".format(proposals_dir, ypp))
 
     def __roll_out_custom_profile(self, fpath="/home/ubuntu/custom_profile"):
-        sudo_write_file(
+        misc.sudo_write_file(
             self.master_remote,
             fpath,
             yaml.dump(self.storage_profile),
@@ -1298,7 +1276,7 @@ class Policy(DeepSea):
         """
         Write policy_cfg to master remote.
         """
-        sudo_write_file(
+        misc.sudo_write_file(
             self.master_remote,
             proposals_dir + "/policy.cfg",
             self.policy_cfg,
@@ -1354,8 +1332,24 @@ class Policy(DeepSea):
 
 class Reboot(DeepSea):
     """
-    A class that does nothing but unconditionally reboot the whole cluster.
+    A class that does nothing but unconditionally reboot, either a single node
+    or the whole cluster.
+
+    Configuration (reboot a single node)
+
+    tasks:
+    - deepsea.reboot:
+          client.salt_master:
+
+    Configuration (reboot the entire cluster)
+
+    tasks:
+    - deepsea.reboot:
+          all:
     """
+
+    err_prefix = '(reboot subtask) '
+
     def __init__(self, ctx, config):
         global deepsea_ctx
         deepsea_ctx['logger_obj'] = log.getChild('reboot')
@@ -1363,9 +1357,128 @@ class Reboot(DeepSea):
         super(Reboot, self).__init__(ctx, config)
 
     def begin(self):
-        log_spec = "all nodes reboot now"
-        self.log.warning(anchored(log_spec))
-        self.reboot_the_cluster_now(log_spec=log_spec)
+        if not self.config:
+            self.log.warning("empty config: nothing to do")
+            return None
+        config_keys = len(self.config)
+        if config_keys > 1:
+            raise ConfigError(
+                self.err_prefix +
+                "config dictionary may contain only one key. "
+                "You provided ->{}<- keys ({})".format(len(config_keys), config_keys)
+                )
+        role_spec, repositories = self.config.items()[0]
+        if role_spec == "all":
+            remote = self.ctx.cluster
+            log_spec = "all nodes reboot now"
+            self.log.warning(anchored(log_spec))
+            self.reboot_the_cluster_now(log_spec=log_spec)
+        else:
+            remote = get_remote_for_role(self.ctx, role_spec)
+            log_spec = "node {} reboot now".format(remote.hostname)
+            self.log.warning(anchored(log_spec))
+            self.reboot_a_single_machine_now(remote, log_spec=log_spec)
+
+    def end(self):
+        pass
+
+    def teardown(self):
+        pass
+
+
+class Repository(DeepSea):
+    """
+    A class for manipulating zypper repos on the test nodes.
+    All it knows how to do is wipe out the existing repos (i.e. rename them to
+    foo.repo.bck) and replace them with a given set of new ones.
+
+    Configuration (one node):
+
+    tasks:
+    - deepsea.repository:
+          client.salt_master:
+              - name: repo_foo
+                url: http://example.com/foo/
+              - name: repo_bar
+                url: http://example.com/bar/
+
+    Configuration (all nodes):
+
+    tasks:
+    - deepsea.repository:
+          all:
+              - name: repo_foo
+                url: http://example.com/foo/
+              - name: repo_bar
+                url: http://example.com/bar/
+
+    To eliminate the need to duplicate the repos array, it can be specified
+    in the configuration of the main deepsea task. Then the yaml will look
+    like so:
+
+    tasks:
+    - deepsea:
+          repositories:
+              - name: repo_foo
+                url: http://example.com/foo/
+              - name: repo_bar
+                url: http://example.com/bar/
+    ...
+    - deepsea.repository:
+          client.salt_master:
+    ...
+    - deepsea.repository:
+          all:
+
+    One last note: we try to be careful and not clobber the repos twice.
+    """
+
+    err_prefix = '(repository subtask) '
+
+    def __init__(self, ctx, config):
+        deepsea_ctx['logger_obj'] = log.getChild('repository')
+        self.name = 'deepsea.repository'
+        super(Repository, self).__init__(ctx, config)
+
+    def _repositories_to_remote(self, remote):
+        args = []
+        for repo in self.repositories:
+            args += [repo['name'] + ':' + repo['url']]
+        self.scripts.run(
+            remote,
+            'clobber_repositories.sh',
+            args=args
+            )
+
+    def begin(self):
+        if not self.config:
+            self.log.warning("empty config: nothing to do")
+            return None
+        config_keys = len(self.config)
+        if config_keys > 1:
+            raise ConfigError(
+                self.err_prefix +
+                "config dictionary may contain only one key. "
+                "You provided ->{}<- keys ({})".format(len(config_keys), config_keys)
+                )
+        role_spec, repositories = self.config.items()[0]
+        if role_spec == "all":
+            remote = self.ctx.cluster
+        else:
+            remote = get_remote_for_role(self.ctx, role_spec)
+        if repositories is None:
+            assert self.repositories, \
+                "self.repositories must be populated if role_dict is None"
+        else:
+            assert isinstance(repositories, list), \
+                "value of role key must be a list of repositories"
+            self.repositories = repositories
+        if not self.repositories:
+            raise ConfigError(
+                self.err_prefix +
+                "No repositories specified. Bailing out!"
+                )
+        self._repositories_to_remote(remote)
 
     def end(self):
         pass
@@ -1413,7 +1526,7 @@ class Script(DeepSea):
             raise ConfigError(
                 self.err_prefix +
                 "config dictionary may contain only one key. "
-                "You provided ->{}<- keys ({}}".format(len(config_keys), config_keys)
+                "You provided ->{}<- keys ({})".format(len(config_keys), config_keys)
                 )
         role_spec, role_dict = self.config.items()[0]
         role_keys = len(role_dict)
@@ -1421,7 +1534,7 @@ class Script(DeepSea):
             raise ConfigError(
                 self.err_prefix +
                 "role dictionary may contain only one key. "
-                "You provided ->{}<- keys ({}}".format(len(role_keys), role_keys)
+                "You provided ->{}<- keys ({})".format(len(role_keys), role_keys)
                 )
         if role_spec == "all":
             remote = self.ctx.cluster
@@ -1444,61 +1557,6 @@ class Script(DeepSea):
             script_spec,
             args=args
             )
-
-    def end(self):
-        pass
-
-    def teardown(self):
-        pass
-
-
-class State(DeepSea):
-    """
-    Runs an arbitrary Salt State on some minions.
-
-    This subtask understands the following config keys:
-
-        state    name of the state to run (mandatory)
-
-        target   target selection specifier (default: *)
-                 For details, see "man salt"
-    """
-
-    err_prefix = '(state subtask) '
-
-    def __init__(self, ctx, config):
-        deepsea_ctx['logger_obj'] = log.getChild('state')
-        super(State, self).__init__(ctx, config)
-        # cast stage/state_orch value to str because it might be a number
-        self.state = str(self.config.get("state", ''))
-        # targets all machines if omitted
-        self.target = str(self.config.get("target", '*'))
-        if not self.state:
-            raise ConfigError(
-                self.err_prefix + "nothing to do. Specify a non-empty value for 'state'")
-
-    def _run_state(self):
-        """Run a state. Dump journalctl on error."""
-        if '*' in self.target:
-            quoted_target = "\'{}\'".format(self.target)
-        else:
-            quoted_target = self.target
-        cmd_str = (
-            "set -ex\n"
-            "timeout 60m salt {} --no-color state.apply {}\n"
-            ).format(quoted_target, self.state)
-        if self.quiet_salt:
-            cmd_str += ' 2>/dev/null'
-        write_file(self.master_remote, 'run_salt_state.sh', cmd_str)
-        remote_exec(
-            self.master_remote,
-            'sudo bash run_salt_state.sh',
-            "state {}".format(self.state),
-            )
-
-    def begin(self):
-        self.log.info(anchored("running state {}".format(self.state)))
-        self._run_state()
 
     def end(self):
         pass
@@ -1549,6 +1607,31 @@ class Validation(DeepSea):
             self.master_remote,
             'ceph_version_sanity.sh',
             )
+
+    def deepsea_install_method(self, **kwargs):
+        """
+        Takes a single kwargs key, which is mandatory and can be
+        either "package" or "source".
+        """
+        config_err = (
+            self.err_prefix +
+            "deepsea_install_method takes a single config key, "
+            "which must be either \"package\" or \"source\""
+            )
+        if len(kwargs) != 1:
+            raise ConfigError(config_err)
+        desired_install_method = kwargs.keys()[0]
+        state_msg = (
+            "Actual DeepSea install method ->{}<- and desired "
+            "install method ->{}<- "
+            .format(self.install_method, desired_install_method)
+            )
+        if desired_install_method != self.install_method:
+            raise ConfigError(
+                self.err_prefix + state_msg +
+                "different! This test requires that they be the same."
+                )
+        self.log.info(state_msg + "the same")
 
     def iscsi_smoke_test(self, **kwargs):
         igw_host = self.role_type_present("igw")
@@ -1647,6 +1730,6 @@ health_ok = HealthOK
 orch = Orch
 policy = Policy
 reboot = Reboot
+repository = Repository
 script = Script
-state = State
 validation = Validation
