@@ -502,6 +502,7 @@ void PrimaryLogPG::on_peer_recover(
   publish_stats_to_osd();
   // done!
   peer_missing[peer].got(soid, recovery_info.version);
+  missing_loc.add_location(soid, peer);
 }
 
 void PrimaryLogPG::begin_peer_recover(
@@ -4843,9 +4844,15 @@ int PrimaryLogPG::do_read(OpContext *ctx, OSDOp& osd_op) {
     (osd->store->has_builtin_csum() && g_conf->osd_skip_data_digest) ||
     g_conf->osd_distrust_data_digest;
 
+  dout(30) << __func__ << " oi.size: " << oi.size << dendl;
+  dout(30) << __func__ << " oi.truncate_seq: " << oi.truncate_seq << dendl;
+  dout(30) << __func__ << " op.extent.truncate_seq: " << op.extent.truncate_seq << dendl;
+  dout(30) << __func__ << " op.extent.truncate_size: " << op.extent.truncate_size << dendl;
+
   // are we beyond truncate_size?
   if ( (seq < op.extent.truncate_seq) &&
-       (op.extent.offset + op.extent.length > op.extent.truncate_size) )
+       (op.extent.offset + op.extent.length > op.extent.truncate_size) &&
+       (size > op.extent.truncate_size) )
     size = op.extent.truncate_size;
 
   if (op.extent.length == 0) //length is zero mean read the whole object
@@ -4858,6 +4865,8 @@ int PrimaryLogPG::do_read(OpContext *ctx, OSDOp& osd_op) {
     op.extent.length = size - op.extent.offset;
     trimmed_read = true;
   }
+
+  dout(30) << __func__ << "op.extent.length is now " << op.extent.length << dendl;
 
   // read into a buffer
   int result = 0;
@@ -8117,7 +8126,7 @@ void PrimaryLogPG::start_copy(CopyCallback *cb, ObjectContextRef obc,
 
 void PrimaryLogPG::_copy_some(ObjectContextRef obc, CopyOpRef cop)
 {
-  dout(10) << __func__ << " " << obc << " " << cop << dendl;
+  dout(10) << __func__ << " " << *obc << " " << cop << dendl;
 
   unsigned flags = 0;
   if (cop->flags & CEPH_OSD_COPY_FROM_FLAG_FLUSH)
@@ -11477,46 +11486,6 @@ void PrimaryLogPG::check_recovery_sources(const OSDMapRef& osdmap)
   }
 }
 
-void PG::MissingLoc::check_recovery_sources(const OSDMapRef& osdmap)
-{
-  set<pg_shard_t> now_down;
-  for (set<pg_shard_t>::iterator p = missing_loc_sources.begin();
-       p != missing_loc_sources.end();
-       ) {
-    if (osdmap->is_up(p->osd)) {
-      ++p;
-      continue;
-    }
-    ldout(pg->cct, 10) << "check_recovery_sources source osd." << *p << " now down" << dendl;
-    now_down.insert(*p);
-    missing_loc_sources.erase(p++);
-  }
-
-  if (now_down.empty()) {
-    ldout(pg->cct, 10) << "check_recovery_sources no source osds (" << missing_loc_sources << ") went down" << dendl;
-  } else {
-    ldout(pg->cct, 10) << "check_recovery_sources sources osds " << now_down << " now down, remaining sources are "
-		       << missing_loc_sources << dendl;
-    
-    // filter missing_loc
-    map<hobject_t, set<pg_shard_t>>::iterator p = missing_loc.begin();
-    while (p != missing_loc.end()) {
-      set<pg_shard_t>::iterator q = p->second.begin();
-      while (q != p->second.end())
-	if (now_down.count(*q)) {
-	  p->second.erase(q++);
-	} else {
-	  ++q;
-	}
-      if (p->second.empty())
-	missing_loc.erase(p++);
-      else
-	++p;
-    }
-  }
-}
-  
-
 bool PrimaryLogPG::start_recovery_ops(
   uint64_t max,
   ThreadPool::TPHandle &handle,
@@ -13836,7 +13805,7 @@ void PrimaryLogPG::log_missing(unsigned missing,
                << " skipped " << missing << " clone(s) in cache tier" << dendl;
   } else {
     clog->info() << mode << " " << pgid << " " << head.get()
-		       << " " << missing << " missing clone(s)";
+		       << " : " << missing << " missing clone(s)";
   }
 }
 
@@ -13863,7 +13832,7 @@ unsigned PrimaryLogPG::process_clones_to(const boost::optional<hobject_t> &head,
     if (!allow_incomplete_clones) {
       next_clone.snap = **curclone;
       clog->error() << mode << " " << pgid << " " << head.get()
-			 << " expected clone " << next_clone << " " << missing
+			 << " : expected clone " << next_clone << " " << missing
                          << " missing";
       ++scrubber.shallow_errors;
       e.set_clone_missing(next_clone.snap);
@@ -13948,7 +13917,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
     if (p->second.attrs.count(OI_ATTR) == 0) {
       oi = boost::none;
       osd->clog->error() << mode << " " << info.pgid << " " << soid
-			<< " no '" << OI_ATTR << "' attr";
+			<< " : no '" << OI_ATTR << "' attr";
       ++scrubber.shallow_errors;
       soid_error.set_info_missing();
     } else {
@@ -13960,7 +13929,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
       } catch (buffer::error& e) {
 	oi = boost::none;
 	osd->clog->error() << mode << " " << info.pgid << " " << soid
-		<< " can't decode '" << OI_ATTR << "' attr " << e.what();
+		<< " : can't decode '" << OI_ATTR << "' attr " << e.what();
 	++scrubber.shallow_errors;
 	soid_error.set_info_corrupted();
         soid_error.set_info_missing(); // Not available too
@@ -13970,7 +13939,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
     if (oi) {
       if (pgbackend->be_get_ondisk_size(oi->size) != p->second.size) {
 	osd->clog->error() << mode << " " << info.pgid << " " << soid
-			   << " on disk size (" << p->second.size
+			   << " : on disk size (" << p->second.size
 			   << ") does not match object info size ("
 			   << oi->size << ") adjusted for ondisk to ("
 			   << pgbackend->be_get_ondisk_size(oi->size)
@@ -14042,10 +14011,10 @@ void PrimaryLogPG::scrub_snapshot_metadata(
       // If we couldn't read the head's snapset, just ignore clones
       if (head && !snapset) {
 	osd->clog->error() << mode << " " << info.pgid << " " << soid
-			  << " clone ignored due to missing snapset";
+			  << " : clone ignored due to missing snapset";
       } else {
 	osd->clog->error() << mode << " " << info.pgid << " " << soid
-			   << " is an unexpected clone";
+			   << " : is an unexpected clone";
       }
       ++scrubber.shallow_errors;
       soid_error.set_headless();
@@ -14077,7 +14046,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 
       if (p->second.attrs.count(SS_ATTR) == 0) {
 	osd->clog->error() << mode << " " << info.pgid << " " << soid
-			  << " no '" << SS_ATTR << "' attr";
+			  << " : no '" << SS_ATTR << "' attr";
         ++scrubber.shallow_errors;
 	snapset = boost::none;
 	head_error.set_snapset_missing();
@@ -14092,7 +14061,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
         } catch (buffer::error& e) {
 	  snapset = boost::none;
           osd->clog->error() << mode << " " << info.pgid << " " << soid
-		<< " can't decode '" << SS_ATTR << "' attr " << e.what();
+		<< " : can't decode '" << SS_ATTR << "' attr " << e.what();
 	  ++scrubber.shallow_errors;
 	  head_error.set_snapset_corrupted();
         }
@@ -14106,7 +14075,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 	  dout(20) << "  snapset " << snapset.get() << dendl;
 	  if (snapset->seq == 0) {
 	    osd->clog->error() << mode << " " << info.pgid << " " << soid
-			       << " snaps.seq not set";
+			       << " : snaps.seq not set";
 	    ++scrubber.shallow_errors;
 	    head_error.set_snapset_error();
           }
@@ -14114,7 +14083,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 
 	if (soid.is_head() && !snapset->head_exists) {
 	  osd->clog->error() << mode << " " << info.pgid << " " << soid
-			  << " snapset.head_exists=false, but head exists";
+			  << " : snapset.head_exists=false, but head exists";
 	  ++scrubber.shallow_errors;
 	  head_error.set_head_mismatch();
 	  // Fix head_exists locally so is_legacy() returns correctly
@@ -14122,7 +14091,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 	}
 	if (soid.is_snapdir() && snapset->head_exists) {
 	  osd->clog->error() << mode << " " << info.pgid << " " << soid
-			  << " snapset.head_exists=true, but snapdir exists";
+			  << " : snapset.head_exists=true, but snapdir exists";
 	  ++scrubber.shallow_errors;
 	  head_error.set_head_mismatch();
 	  // For symmetry fix this too, but probably doesn't matter
@@ -14156,13 +14125,13 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 
       if (snapset->clone_size.count(soid.snap) == 0) {
 	osd->clog->error() << mode << " " << info.pgid << " " << soid
-			   << " is missing in clone_size";
+			   << " : is missing in clone_size";
 	++scrubber.shallow_errors;
 	soid_error.set_size_mismatch();
       } else {
         if (oi && oi->size != snapset->clone_size[soid.snap]) {
 	  osd->clog->error() << mode << " " << info.pgid << " " << soid
-			     << " size " << oi->size << " != clone_size "
+			     << " : size " << oi->size << " != clone_size "
 			     << snapset->clone_size[*curclone];
 	  ++scrubber.shallow_errors;
 	  soid_error.set_size_mismatch();
@@ -14170,7 +14139,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 
         if (snapset->clone_overlap.count(soid.snap) == 0) {
 	  osd->clog->error() << mode << " " << info.pgid << " " << soid
-			     << " is missing in clone_overlap";
+			     << " : is missing in clone_overlap";
 	  ++scrubber.shallow_errors;
 	  soid_error.set_size_mismatch();
 	} else {
@@ -14193,7 +14162,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 
 	  if (bad_interval_set) {
 	    osd->clog->error() << mode << " " << info.pgid << " " << soid
-			       << " bad interval_set in clone_overlap";
+			       << " : bad interval_set in clone_overlap";
 	    ++scrubber.shallow_errors;
 	    soid_error.set_size_mismatch();
 	  } else {
@@ -14257,8 +14226,8 @@ void PrimaryLogPG::scrub_snapshot_metadata(
       continue;
     } else if (obc->obs.oi.soid != p->first) {
       osd->clog->error() << info.pgid << " " << mode
-			 << " object " << p->first
-			 << " has a valid oi attr with a mismatched name, "
+			 << " " << p->first
+			 << " : object has a valid oi attr with a mismatched name, "
 			 << " obc->obs.oi.soid: " << obc->obs.oi.soid;
       continue;
     }
@@ -14421,7 +14390,7 @@ void PrimaryLogPG::_scrub_finish()
       scrub_cstat.sum.num_whiteouts != info.stats.stats.sum.num_whiteouts ||
       scrub_cstat.sum.num_bytes != info.stats.stats.sum.num_bytes) {
     osd->clog->error() << info.pgid << " " << mode
-		      << " stat mismatch, got "
+		      << " : stat mismatch, got "
 		      << scrub_cstat.sum.num_objects << "/" << info.stats.stats.sum.num_objects << " objects, "
 		      << scrub_cstat.sum.num_object_clones << "/" << info.stats.stats.sum.num_object_clones << " clones, "
 		      << scrub_cstat.sum.num_objects_dirty << "/" << info.stats.stats.sum.num_objects_dirty << " dirty, "
