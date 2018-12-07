@@ -125,5 +125,30 @@ struct cls_refcount_read_ret {
 };
 WRITE_CLASS_ENCODER(cls_refcount_read_ret)
 
+struct obj_refcount {
+  map<string, bool> refs;
+  set<string> retired_refs;
+
+  obj_refcount() {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(2, 1, bl);
+    ::encode(refs, bl);
+    ::encode(retired_refs, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(2, bl);
+    ::decode(refs, bl);
+    if (struct_v >= 2) {
+      ::decode(retired_refs, bl);
+    }
+    DECODE_FINISH(bl);
+  }
+  void dump(ceph::Formatter *f) const;
+  static void generate_test_instances(list<obj_refcount*>& ls);
+};
+WRITE_CLASS_ENCODER(obj_refcount)
 
 #endif

@@ -14,30 +14,6 @@ CLS_NAME(refcount)
 
 #define REFCOUNT_ATTR "refcount"
 
-struct obj_refcount {
-  map<string, bool> refs;
-  set<string> retired_refs;
-
-  obj_refcount() {}
-
-  void encode(bufferlist& bl) const {
-    ENCODE_START(2, 1, bl);
-    ::encode(refs, bl);
-    ::encode(retired_refs, bl);
-    ENCODE_FINISH(bl);
-  }
-
-  void decode(bufferlist::iterator& bl) {
-    DECODE_START(2, bl);
-    ::decode(refs, bl);
-    if (struct_v >= 2) {
-      ::decode(retired_refs, bl);
-    }
-    DECODE_FINISH(bl);
-  }
-};
-WRITE_CLASS_ENCODER(obj_refcount)
-
 static string wildcard_tag;
 
 static int read_refcount(cls_method_context_t hctx, bool implicit_ref, obj_refcount *objr)

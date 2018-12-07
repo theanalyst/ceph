@@ -442,6 +442,7 @@ TYPE(cls_refcount_put_op)
 TYPE(cls_refcount_read_op)
 TYPE(cls_refcount_read_ret)
 TYPE(cls_refcount_set_op)
+TYPE(obj_refcount)
 
 #include "journal/Entry.h"
 TYPE(journal::Entry)
