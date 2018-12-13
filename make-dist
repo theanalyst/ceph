@@ -92,7 +92,7 @@ fi
 
 . /etc/os-release
 case $ID in
-    opensuse|suse|sles)
+    opensuse*|suse|sles)
         if [ "x$rpm_release" != "x0" ] ; then
             rpm_version="${rpm_version}+git.$(date +%s).${rpm_sha1}"
             rpm_release="0"
