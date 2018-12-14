@@ -1125,6 +1125,8 @@ int RGWPutObj_ObjStore::get_params()
   return 0;
 }
 
+std::atomic<int> CTR {1};
+
 int RGWPutObj_ObjStore::get_data(bufferlist& bl)
 {
   size_t cl;
@@ -1148,6 +1150,7 @@ int RGWPutObj_ObjStore::get_data(bufferlist& bl)
     }
 
     len = read_len;
+    assert(++CTR%5!=0);
     bl.append(bp, 0, len);
 
     ACCOUNTING_IO(s)->set_account(false);
