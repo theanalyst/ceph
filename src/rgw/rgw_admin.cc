@@ -1067,6 +1067,22 @@ static void show_roles_info(vector<RGWRole>& roles, Formatter* formatter)
   formatter->flush(cout);
 }
 
+static void show_reshard_status(
+  const list<cls_rgw_bucket_instance_entry>& status, Formatter *formatter)
+{
+  formatter->open_array_section("status");
+  for (const auto& entry : status) {
+    formatter->open_object_section("entry");
+    formatter->dump_string("reshard_status", to_string(entry.reshard_status));
+    formatter->dump_string("new_bucket_instance_id",
+			   entry.new_bucket_instance_id);
+    formatter->dump_unsigned("num_shards", entry.num_shards);
+    formatter->close_section();
+  }
+  formatter->close_section();
+  formatter->flush(cout);
+}
+
 class StoreDestructor {
   RGWRados *store;
 public:
@@ -2470,7 +2486,7 @@ int check_reshard_bucket_params(RGWRados *store,
   int ret = init_bucket(tenant, bucket_name, bucket_id, bucket_info, bucket, &attrs);
   if (ret < 0) {
     cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
-    return -ret;
+    return ret;
   }
 
   int num_source_shards = (bucket_info.num_shards > 0 ? bucket_info.num_shards : 1);
@@ -2792,7 +2808,7 @@ int main(int argc, const char **argv)
         return EINVAL;
       }
     } else if (ceph_argparse_witharg(args, i, &val, "--max-size", (char*)NULL)) {
-      max_size = strict_iecstrtoll(val.c_str(), &err);
+      max_size = strict_iec_cast<long long>(val.c_str(), &err);
       if (!err.empty()) {
         cerr << "ERROR: failed to parse max size: " << err << std::endl;
         return EINVAL;
@@ -6031,8 +6047,7 @@ next:
       return -r;
     }
 
-    encode_json("status", status, formatter);
-    formatter->flush(cout);
+    show_reshard_status(status, formatter);
   }
 
   if (opt_cmd == OPT_RESHARD_PROCESS) {
