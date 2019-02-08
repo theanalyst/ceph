@@ -27,6 +27,10 @@ tasks:
         - salt.command:
                 command: 'state.apply ceph.updates.salt'
         - salt.command:
+                command: 'cmd.shell zypper -n in -f --from ses --force-resolution salt'
+        - salt.command:
+                command: 'cmd.shell rpm -qa | grep salt'
+        - salt.command:
                 command: 'saltutil.sync_all'
         - deepsea.orch:
                 state_orch: ceph.maintenance.upgrade
