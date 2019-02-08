@@ -19,6 +19,7 @@
 #include <pthread.h>
 #include "common/Cond.h"
 #include "obj_bencher.h"
+#include "auth/Crypto.h"
 
 const std::string BENCH_LASTRUN_METADATA = "benchmark_last_metadata";
 const std::string BENCH_PREFIX = "benchmark_data";
@@ -46,13 +47,58 @@ static std::string generate_object_prefix(int pid = 0) {
   oss << generate_object_prefix_nopid() << "_" << cached_pid;
   return oss.str();
 }
+static const char alphanum_table[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-static std::string generate_object_name(int objnum, int pid = 0)
+static int gen_rand_alphanumeric(char *dest, int size) /* size should be the required string size + 1 */
 {
-  std::ostringstream oss;
-  oss << generate_object_prefix(pid) << "_object" << objnum;
-  return oss.str();
+  int ret = get_random_bytes(dest, size);
+  if (ret < 0) {
+    return ret;
+  }
+
+  int i;
+  for (i=0; i<size - 1; i++) {
+    int pos = (unsigned)dest[i];
+    dest[i] = alphanum_table[pos & 63];
+  }
+  dest[i] = '\0';
+
+  return 0;
 }
+
+std::string cached_shadow_name;
+
+static std::string do_generate_shadow_name()
+{
+  std::string prefix = "73f6ff19-7fb5-4863-83cd-83d806f99867.4143.1__shadow_.";
+  static constexpr auto hash_sz=32;
+  char hash[hash_sz + 1];
+  gen_rand_alphanumeric(hash, hash_sz);
+  prefix += hash;
+  prefix += "_";
+  return prefix;
+}
+//std::atomic<uint64_t> ctr {0};
+
+static std::string generate_shadow_name(int objnum, int pid)
+{
+  if (cached_shadow_name.empty()){
+    cached_shadow_name = do_generate_shadow_name();
+    std::cout << "using " << cached_shadow_name << "pbj" << objnum << std::endl;
+  }
+
+  auto oname = cached_shadow_name + std::to_string(objnum);
+  return oname;
+}
+
+static std::string generate_object_name(int objnum=0, int pid = 0)
+{
+  return generate_shadow_name(objnum,pid);
+  // std::ostringstream oss;
+  // oss << generate_object_prefix(pid) << "_object" << objnum;
+  // return oss.str();
+}
+
 
 static void sanitize_object_contents (bench_data *data, size_t length) {
   memset(data->object_contents, 'z', length);
@@ -421,6 +467,7 @@ int ObjBencher::write_bench(int secondsToRun,
   //set up writes so I can start them together
   for (int i = 0; i<concurrentios; ++i) {
     name[i] = generate_object_name(i / writes_per_object);
+    std::cout << "name i" << name[i] << std::endl;
     contents[i] = new bufferlist();
     snprintf(data.object_contents, data.op_size, "I'm the %16dth op!", i);
     contents[i]->append(data.object_contents, data.op_size);
@@ -439,6 +486,7 @@ int ObjBencher::write_bench(int secondsToRun,
     r = create_completion(i, _aio_cb, (void *)&lc);
     if (r < 0)
       goto ERR;
+    std::cout << "ABHI: GOPING TO WRITE NAME I" << name[i] << std::endl;
     r = aio_write(name[i], i, *contents[i], data.op_size,
 		  data.op_size * (i % writes_per_object));
     if (r < 0) { //naughty, doesn't clean up heap
@@ -510,6 +558,7 @@ int ObjBencher::write_bench(int secondsToRun,
     r = create_completion(slot, _aio_cb, &lc);
     if (r < 0)
       goto ERR;
+    std::cout << "newName: " << newName<< std::endl;
     r = aio_write(newName, slot, *newContents, data.op_size,
 		  data.op_size * (data.started % writes_per_object));
     if (r < 0) {//naughty; doesn't clean up heap space.
