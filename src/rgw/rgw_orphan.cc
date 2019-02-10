@@ -428,8 +428,9 @@ int RGWOrphanSearch::handle_stat_result(map<int, list<string> >& oids, RGWRados:
     obj_oids.insert(obj_fingerprint(loc, "shadow"));
   } else {
     RGWObjManifest& manifest = result.manifest;
-    if (manifest.obj_size <= manifest.head_size) {
+    if (manifest.get_obj_size() <= manifest.get_head_size()) {
       // Do nothing, as the object is contained within a head.
+      ldout(store->ctx(),20) << "abhi: skipping obj as it fits in a manifest" << dendl;
       return 0;
     }
     RGWObjManifest::obj_iterator miter;
