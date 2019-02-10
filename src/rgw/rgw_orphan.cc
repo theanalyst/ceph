@@ -539,7 +539,7 @@ int RGWOrphanSearch::build_linked_oids_for_bucket(const string& bucket_instance_
           }
         }
       }
-      if (++count >= COUNT_BEFORE_FLUSH) {
+      if (oids.size() >= COUNT_BEFORE_FLUSH) {
         ret = log_oids(linked_objs_index, oids);
         if (ret < 0) {
           cerr << __func__ << ": ERROR: log_oids() returned ret=" << ret << std::endl;
