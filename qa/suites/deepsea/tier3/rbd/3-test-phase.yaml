@@ -7,3 +7,5 @@ tasks:
     clients:
       client.0:
         - rbd/cli_generic.sh
+        - rbd/journal.sh
+        - rbd/map-unmap.sh
