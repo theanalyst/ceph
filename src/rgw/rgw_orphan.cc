@@ -476,7 +476,38 @@ int RGWOrphanSearch::build_linked_oids_for_bucket(const string& bucket_instance_
   ldout(store->ctx(), 10) << "building linked oids for bucket instance: " << bucket_instance_id << dendl;
   RGWBucketInfo bucket_info;
   RGWObjectCtx obj_ctx(store);
-  int ret = store->get_bucket_instance_info(obj_ctx, bucket_instance_id, bucket_info, NULL, NULL);
+  auto p = bucket_instance_id.find(":");
+  std::string bucket_name, bucket_id, tenant;
+
+  if (p != std::string::npos) {
+    auto bucket_tenant_name = bucket_instance_id.substr(0, p);
+    auto pos = bucket_tenant_name.find("/");
+    if (pos != std::string::npos){
+      tenant = bucket_tenant_name.substr(0, pos);
+      bucket_name = bucket_tenant_name.substr(pos+1);
+    } else {
+      bucket_name = std::move(bucket_tenant_name);
+    }
+    bucket_id = bucket_instance_id.substr(p+1);
+  }
+  RGWBucketInfo cur_bucket_info;
+  int ret = store->get_bucket_info(obj_ctx, tenant, bucket_name, cur_bucket_info, nullptr);
+  if (ret < 0) {
+    if (ret == -ENOENT) {
+      /* probably raced with bucket removal */
+      return 0;
+    }
+    lderr(store->ctx()) << __func__ << ": ERROR: RGWRados::get_bucket_instance_info() returned ret=" << ret << dendl;
+    return ret;
+  }
+
+  ret = store->get_bucket_instance_info(obj_ctx, bucket_instance_id, bucket_info, NULL, NULL);
+  if (cur_bucket_info.bucket.bucket_id != bucket_id){
+    ldout(store->ctx(),0) << __func__ << ": WARNING: stale bucket instance id=" << bucket_id
+			  << "for bucket " << cur_bucket_info.bucket.name
+			  << "current instance=" << cur_bucket_info.bucket.bucket_id << dendl;
+    return 0;
+  }
   if (ret < 0) {
     if (ret == -ENOENT) {
       /* probably raced with bucket removal */
