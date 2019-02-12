@@ -497,14 +497,12 @@ int RGWOrphanSearch::build_linked_oids_for_bucket(const string& bucket_instance_
   bool truncated;
 
   deque<RGWRados::Object::Stat> stat_ops;
-
-  int count = 0;
-
+  auto list_bucket_max_entries = store->ctx()->_conf->rgw_list_bucket_min_readahead;
   do {
     vector<rgw_bucket_dir_entry> result;
 
 #define MAX_LIST_OBJS_ENTRIES 100
-    ret = list_op.list_objects(MAX_LIST_OBJS_ENTRIES, &result, NULL, &truncated);
+    ret = list_op.list_objects(list_bucket_max_entries, &result, NULL, &truncated);
     if (ret < 0) {
       cerr << "ERROR: store->list_objects(): " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -516,6 +514,11 @@ int RGWOrphanSearch::build_linked_oids_for_bucket(const string& bucket_instance_
         ldout(store->ctx(), 20) << "obj entry: " << entry.key.name << dendl;
       } else {
         ldout(store->ctx(), 20) << "obj entry: " << entry.key.name << " [" << entry.key.instance << "]" << dendl;
+      }
+
+      if (entry.meta.accounted_size <= (uint64_t)store->ctx()->_conf->rgw_max_chunk_size) {
+        ldout(store->ctx(),0) << "abhi: skipping stat as obj fits in head" << dendl;
+        continue;
       }
 
       ldout(store->ctx(), 20) << __func__ << ": entry.key.name=" << entry.key.name << " entry.key.instance=" << entry.key.instance << dendl;
@@ -546,7 +549,6 @@ int RGWOrphanSearch::build_linked_oids_for_bucket(const string& bucket_instance_
           cerr << __func__ << ": ERROR: log_oids() returned ret=" << ret << std::endl;
           return ret;
         }
-        count = 0;
         oids.clear();
       }
     }
