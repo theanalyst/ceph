@@ -785,6 +785,19 @@ static int read_index_entry(cls_method_context_t hctx, string& name, T *entry)
   return 0;
 }
 
+template <typename T>
+static int decode_input_op(bufferlist *in, T& op){
+  auto in_iter = in->cbegin();
+
+  try {
+    decode(op, in_iter);
+  } catch (buffer::error& err) {
+    CLS_LOG(1, "ERROR: %s(): failed to decode entry\n", __func__);
+    return -EINVAL;
+  }
+  return 0;
+}
+
 static int read_key_entry(cls_method_context_t hctx, cls_rgw_obj_key& key,
 			  string *idx, rgw_bucket_dir_entry *entry,
                           bool special_delete_marker_name)
@@ -2699,18 +2712,13 @@ static int bi_log_list_entries(cls_method_context_t hctx, const string& marker,
 
 static int rgw_bi_log_list(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_bi_log_list_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_bi_log_list(): failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   cls_rgw_bi_log_list_ret op_ret;
-  int ret = bi_log_list_entries(hctx, op.marker, op.max, op_ret.entries, &op_ret.truncated);
+  ret = bi_log_list_entries(hctx, op.marker, op.max, op_ret.entries, &op_ret.truncated);
   if (ret < 0)
     return ret;
 
@@ -2750,21 +2758,16 @@ static int bi_log_list_trim_entries(cls_method_context_t hctx,
 
 static int rgw_bi_log_trim(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_bi_log_trim_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_bi_log_list(): failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   cls_rgw_bi_log_list_ret op_ret;
   list<rgw_bi_log_entry> entries;
 #define MAX_TRIM_ENTRIES 1000 /* don't do more than that in a single operation */
   bool truncated;
-  int ret = bi_log_list_trim_entries(hctx, op.start_marker, op.end_marker, entries, &truncated);
+  ret = bi_log_list_trim_entries(hctx, op.start_marker, op.end_marker, entries, &truncated);
   if (ret < 0)
     return ret;
 
@@ -2896,15 +2899,10 @@ int rgw_user_usage_log_add(cls_method_context_t hctx, bufferlist *in, bufferlist
 {
   CLS_LOG(10, "rgw_user_usage_log_add()");
 
-  auto in_iter = in->cbegin();
   rgw_cls_usage_log_add_op op;
-
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_user_usage_log_add(): failed to decode request\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   rgw_usage_log_info& info = op.info;
   vector<rgw_usage_log_entry>::iterator iter;
@@ -2920,7 +2918,7 @@ int rgw_user_usage_log_add(cls_method_context_t hctx, bufferlist *in, bufferlist
     CLS_LOG(10, "rgw_user_usage_log_add user=%s bucket=%s\n", puser->to_str().c_str(), entry.bucket.c_str());
 
     bufferlist record_bl;
-    int ret = cls_cxx_map_get_val(hctx, key_by_time, &record_bl);
+    ret = cls_cxx_map_get_val(hctx, key_by_time, &record_bl);
     if (ret < 0 && ret != -ENOENT) {
       CLS_LOG(1, "ERROR: rgw_user_usage_log_add(): cls_cxx_map_read_key returned %d\n", ret);
       return -EINVAL;
@@ -3065,22 +3063,17 @@ int rgw_user_usage_log_read(cls_method_context_t hctx, bufferlist *in, bufferlis
 {
   CLS_LOG(10, "rgw_user_usage_log_read()");
 
-  auto in_iter = in->cbegin();
   rgw_cls_usage_log_read_op op;
-
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_user_usage_log_read(): failed to decode request\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   rgw_cls_usage_log_read_ret ret_info;
   map<rgw_user_bucket, rgw_usage_log_entry> *usage = &ret_info.usage;
   string iter = op.iter;
 #define MAX_ENTRIES 1000
   uint32_t max_entries = (op.max_entries ? op.max_entries : MAX_ENTRIES);
-  int ret = usage_iterate_range(hctx, op.start_epoch, op.end_epoch, op.owner, op.bucket, iter, max_entries, &ret_info.truncated, usage_log_read_cb, (void *)usage);
+  ret = usage_iterate_range(hctx, op.start_epoch, op.end_epoch, op.owner, op.bucket, iter, max_entries, &ret_info.truncated, usage_log_read_cb, (void *)usage);
   if (ret < 0)
     return ret;
 
@@ -3120,15 +3113,10 @@ int rgw_user_usage_log_trim(cls_method_context_t hctx, bufferlist *in, bufferlis
   if (ret < 0)
     return ret;
 
-  auto in_iter = in->cbegin();
   rgw_cls_usage_log_trim_op op;
-
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_user_log_usage_log_trim(): failed to decode request\n");
-    return -EINVAL;
-  }
+  ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   string iter;
   bool more;
@@ -3285,30 +3273,20 @@ int gc_record_decode(bufferlist& bl, cls_rgw_gc_obj_info& e)
 
 static int rgw_cls_gc_set_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_gc_set_entry_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_gc_set_entry(): failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   return gc_update_entry(hctx, op.expiration_secs, op.info);
 }
 
 static int rgw_cls_gc_defer_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_gc_defer_entry_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_gc_defer_entry(): failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   return gc_defer_entry(hctx, op.tag, op.expiration_secs);
 }
@@ -3407,20 +3385,15 @@ static int gc_list_entries(cls_method_context_t hctx, const string& marker,
 
 static int rgw_cls_gc_list(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_gc_list_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_gc_list(): failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   cls_rgw_gc_list_ret op_ret;
 #define GC_LIST_ENTRIES_DEFAULT 128
-  int ret = gc_list_entries(hctx, op.marker, (op.max ? op.max : GC_LIST_ENTRIES_DEFAULT), op.expired_only, 
-   op_ret.entries, &op_ret.truncated, op_ret.next_marker);
+  ret = gc_list_entries(hctx, op.marker, (op.max ? op.max : GC_LIST_ENTRIES_DEFAULT), op.expired_only,
+                        op_ret.entries, &op_ret.truncated, op_ret.next_marker);
   if (ret < 0)
     return ret;
 
@@ -3462,70 +3435,50 @@ static int gc_remove(cls_method_context_t hctx, vector<string>& tags)
 
 static int rgw_cls_gc_remove(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_gc_remove_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_gc_remove(): failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   return gc_remove(hctx, op.tags);
 }
 
 static int rgw_cls_lc_set_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_lc_set_entry_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_lc_set_entry(): failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   bufferlist bl;
   encode(op.entry, bl);
 
-  int ret = cls_cxx_map_set_val(hctx, op.entry.first, &bl);
+  ret = cls_cxx_map_set_val(hctx, op.entry.first, &bl);
   return ret;
 }
 
 static int rgw_cls_lc_rm_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_lc_rm_entry_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_lc_rm_entry(): failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
-  int ret = cls_cxx_map_remove_key(hctx, op.entry.first);
-  return ret;
+  return cls_cxx_map_remove_key(hctx, op.entry.first);
 }
 
 static int rgw_cls_lc_get_next_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
   auto in_iter = in->cbegin();
-  cls_rgw_lc_get_next_entry_ret op_ret;
   cls_rgw_lc_get_next_entry_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_lc_get_next_entry: failed to decode op\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   map<string, bufferlist> vals;
   string filter_prefix;
   bool more;
-  int ret = cls_cxx_map_get_vals(hctx, op.marker, filter_prefix, 1, &vals, &more);
+  ret = cls_cxx_map_get_vals(hctx, op.marker, filter_prefix, 1, &vals, &more);
   if (ret < 0)
     return ret;
   map<string, bufferlist>::iterator it;
@@ -3540,6 +3493,8 @@ static int rgw_cls_lc_get_next_entry(cls_method_context_t hctx, bufferlist *in, 
       return -EIO;
     }
   }
+
+  cls_rgw_lc_get_next_entry_ret op_ret;
   op_ret.entry = entry;
   encode(op_ret, *out);
   return 0;
@@ -3548,19 +3503,15 @@ static int rgw_cls_lc_get_next_entry(cls_method_context_t hctx, bufferlist *in, 
 static int rgw_cls_lc_list_entries(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
   cls_rgw_lc_list_entries_op op;
-  auto in_iter = in->cbegin();
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_lc_list_entries(): failed to decode op\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   cls_rgw_lc_list_entries_ret op_ret;
   bufferlist::const_iterator iter;
   map<string, bufferlist> vals;
   string filter_prefix;
-  int ret = cls_cxx_map_get_vals(hctx, op.marker, filter_prefix, op.max_entries, &vals, &op_ret.is_truncated);
+  ret = cls_cxx_map_get_vals(hctx, op.marker, filter_prefix, op.max_entries, &vals, &op_ret.is_truncated);
   if (ret < 0)
     return ret;
   map<string, bufferlist>::iterator it;
@@ -3581,20 +3532,14 @@ static int rgw_cls_lc_list_entries(cls_method_context_t hctx, bufferlist *in, bu
 
 static int rgw_cls_lc_put_head(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_lc_put_head_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_lc_put_head(): failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   bufferlist bl;
   encode(op.head, bl);
-  int ret = cls_cxx_map_write_header(hctx,&bl);
-  return ret;
+  return cls_cxx_map_write_header(hctx,&bl);
 }
 
 static int rgw_cls_lc_get_head(cls_method_context_t hctx, bufferlist *in,  bufferlist *out)
@@ -3624,23 +3569,17 @@ static int rgw_cls_lc_get_head(cls_method_context_t hctx, bufferlist *in,  buffe
 
 static int rgw_reshard_add(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_reshard_add_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_reshard_add: failed to decode entry\n");
-    return -EINVAL;
-  }
-
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   string key;
   op.entry.get_key(&key);
 
   bufferlist bl;
   encode(op.entry, bl);
-  int ret = cls_cxx_map_set_val(hctx, key, &bl);
+  ret = cls_cxx_map_set_val(hctx, key, &bl);
   if (ret < 0) {
     CLS_ERR("error adding reshard job for bucket %s with key %s",op.entry.bucket_name.c_str(), key.c_str());
     return ret;
@@ -3704,20 +3643,15 @@ static int get_reshard_entry(cls_method_context_t hctx, const string& key, cls_r
 
 static int rgw_reshard_get(cls_method_context_t hctx, bufferlist *in,  bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_reshard_get_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_reshard_get: failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   string key;
   cls_rgw_reshard_entry  entry;
   op.entry.get_key(&key);
-  int ret = get_reshard_entry(hctx, key, &entry);
+  ret = get_reshard_entry(hctx, key, &entry);
   if (ret < 0) {
     return ret;
   }
@@ -3730,20 +3664,15 @@ static int rgw_reshard_get(cls_method_context_t hctx, bufferlist *in,  bufferlis
 
 static int rgw_reshard_remove(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  auto in_iter = in->cbegin();
-
   cls_rgw_reshard_remove_op op;
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: rgw_cls_rehard_remove: failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   string key;
   cls_rgw_reshard_entry  entry;
   cls_rgw_reshard_entry::generate_key(op.tenant, op.bucket_name, &key);
-  int ret = get_reshard_entry(hctx, key, &entry);
+  ret = get_reshard_entry(hctx, key, &entry);
   if (ret < 0) {
     return ret;
   }
@@ -3764,20 +3693,15 @@ static int rgw_reshard_remove(cls_method_context_t hctx, bufferlist *in, bufferl
 static int rgw_set_bucket_resharding(cls_method_context_t hctx, bufferlist *in,  bufferlist *out)
 {
   cls_rgw_set_bucket_resharding_op op;
-
-  auto in_iter = in->cbegin();
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: cls_rgw_set_bucket_resharding: failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   rgw_bucket_dir_header header;
-  int rc = read_bucket_header(hctx, &header);
-  if (rc < 0) {
+  ret = read_bucket_header(hctx, &header);
+  if (ret < 0) {
     CLS_LOG(1, "ERROR: %s(): failed to read header\n", __func__);
-    return rc;
+    return ret;
   }
 
   header.new_instance.set_status(op.entry.new_bucket_instance_id, op.entry.num_shards, op.entry.reshard_status);
@@ -3788,20 +3712,15 @@ static int rgw_set_bucket_resharding(cls_method_context_t hctx, bufferlist *in, 
 static int rgw_clear_bucket_resharding(cls_method_context_t hctx, bufferlist *in,  bufferlist *out)
 {
   cls_rgw_clear_bucket_resharding_op op;
-
-  auto in_iter = in->cbegin();
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: cls_rgw_clear_bucket_resharding: failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   rgw_bucket_dir_header header;
-  int rc = read_bucket_header(hctx, &header);
-  if (rc < 0) {
+  ret = read_bucket_header(hctx, &header);
+  if (ret < 0) {
     CLS_LOG(1, "ERROR: %s(): failed to read header\n", __func__);
-    return rc;
+    return ret;
   }
   header.new_instance.clear();
 
@@ -3811,20 +3730,15 @@ static int rgw_clear_bucket_resharding(cls_method_context_t hctx, bufferlist *in
 static int rgw_guard_bucket_resharding(cls_method_context_t hctx, bufferlist *in,  bufferlist *out)
 {
   cls_rgw_guard_bucket_resharding_op op;
-
-  auto in_iter = in->cbegin();
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: cls_rgw_clear_bucket_resharding: failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   rgw_bucket_dir_header header;
-  int rc = read_bucket_header(hctx, &header);
-  if (rc < 0) {
+  ret = read_bucket_header(hctx, &header);
+  if (ret < 0) {
     CLS_LOG(1, "ERROR: %s(): failed to read header\n", __func__);
-    return rc;
+    return ret;
   }
 
   if (header.resharding()) {
@@ -3838,20 +3752,15 @@ static int rgw_get_bucket_resharding(cls_method_context_t hctx,
 				     bufferlist *in, bufferlist *out)
 {
   cls_rgw_get_bucket_resharding_op op;
-
-  auto in_iter = in->cbegin();
-  try {
-    decode(op, in_iter);
-  } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: cls_rgw_clear_bucket_resharding: failed to decode entry\n");
-    return -EINVAL;
-  }
+  int ret = decode_input_op(in, op);
+  if (ret < 0)
+    return ret;
 
   rgw_bucket_dir_header header;
-  int rc = read_bucket_header(hctx, &header);
-  if (rc < 0) {
+  ret = read_bucket_header(hctx, &header);
+  if (ret < 0) {
     CLS_LOG(1, "ERROR: %s(): failed to read header\n", __func__);
-    return rc;
+    return ret;
   }
 
   cls_rgw_get_bucket_resharding_ret op_ret;
