@@ -756,7 +756,7 @@ static void log_entry(const char *func, const char *str, rgw_bucket_olh_entry *e
 }
 
 template <class T>
-static int read_index_entry(cls_method_context_t hctx, string& name, T *entry)
+static int read_entry(cls_method_context_t hctx, const string& name, T *entry)
 {
   bufferlist current_entry;
   int rc = cls_cxx_map_get_val(hctx, name, &current_entry);
@@ -768,9 +768,18 @@ static int read_index_entry(cls_method_context_t hctx, string& name, T *entry)
   try {
     decode(*entry, cur_iter);
   } catch (buffer::error& err) {
-    CLS_LOG(1, "ERROR: read_index_entry(): failed to decode entry\n");
+    CLS_LOG(1, "ERROR: %s(): failed to decode entry\n", __func__);
     return -EIO;
   }
+  return 0;
+}
+
+template <class T>
+static int read_index_entry(cls_method_context_t hctx, string& name, T *entry)
+{
+  int rc = read_entry(hctx, name, entry);
+  if (rc < 0)
+    return rc;
 
   log_entry(__func__, "existing entry", entry);
   return 0;
