@@ -514,6 +514,22 @@ int AsioFrontend::init_ssl()
     listeners.back().use_ssl = true;
   }
 
+  auto ssl_ports = config.equal_range("ssl_v6_port");
+  for (auto i = ssl_ports.first; i != ssl_ports.second; ++i) {
+    if (!have_cert) {
+      lderr(ctx()) << "no ssl_certificate configured for ssl_port" << dendl;
+      return -EINVAL;
+    }
+    auto port = parse_port(i->second.c_str(), ec);
+    if (ec) {
+      lderr(ctx()) << "failed to parse ssl_port=" << i->second << dendl;
+      return -ec.value();
+    }
+    listeners.emplace_back(context);
+    listeners.back().endpoint = tcp::endpoint(tcp::v6(), port);;
+    listeners.back().use_ssl = true;
+  }
+
   auto endpoints = config.equal_range("ssl_endpoint");
   for (auto i = endpoints.first; i != endpoints.second; ++i) {
     if (!have_cert) {
