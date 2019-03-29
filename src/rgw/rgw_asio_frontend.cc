@@ -394,6 +394,17 @@ int AsioFrontend::init()
     listeners.back().endpoint.port(port);
   }
 
+  auto v6_ports = config.equal_range("v6_port");
+  for (auto i = v6_ports.first; i != v6_ports.second; ++i) {
+    auto port = parse_port(i->second.c_str(), ec);
+    if (ec) {
+      lderr(ctx()) << "failed to parse v6_port=" << i->second << dendl;
+      return -ec.value();
+    }
+    listeners.emplace_back(context);
+    listeners.back().endpoint = tcp::endpoint(tcp::v6(), port);
+  }
+
   auto endpoints = config.equal_range("endpoint");
   for (auto i = endpoints.first; i != endpoints.second; ++i) {
     auto endpoint = parse_endpoint(i->second, 80, ec);
@@ -412,6 +423,16 @@ int AsioFrontend::init()
       lderr(ctx()) << "failed to open socket: " << ec.message() << dendl;
       return -ec.value();
     }
+
+    if (l.endpoint.protocol() == tcp::v6()) {
+      l.acceptor.set_option(boost::asio::ip::v6_only(true), ec);
+      if (ec) {
+        lderr(ctx()) << "failed to set v6_only socket option: "
+		     << ec.message() << dendl;
+	return -ec.value();
+      }
+    }
+
     l.acceptor.set_option(tcp::acceptor::reuse_address(true));
     l.acceptor.bind(l.endpoint, ec);
     if (ec) {
