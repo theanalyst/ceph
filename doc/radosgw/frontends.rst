@@ -20,10 +20,10 @@ and the Boost.Asio library for asynchronous network i/o.
 Options
 -------
 
-``port`` and ``ssl_port``
+``port`` ``v6_port`` and ``ssl_port`` ``ssl_v6_port``
 
-:Description: Sets the listening port number. Can be specified multiple
-              times as in ``port=80 port=8000``.
+:Description: Sets the listening port number. v6_ports would listen on ipv6
+              only. Can be specified multiple times as in ``port=80 port=8000 v6_port=80``.
 
 :Type: Integer
 :Default: ``80``
@@ -31,12 +31,13 @@ Options
 
 ``endpoint`` and ``ssl_endpoint``
 
-:Description: Sets the listening address in the form ``address[:port]``,
-              where the address is an IPv4 address string in dotted decimal
-              form, or an IPv6 address in hexadecimal notation surrounded
-              by square brackets. The optional port defaults to 80 for
-              ``endpoint`` and 443 for ``ssl_endpoint``. Can be specified
-              multiple times as in ``endpoint=[::1] endpoint=192.168.0.100:8000``.
+:Description: Sets the listening address in the form ``address[:port]``, where
+              the address is an IPv4 address string in dotted decimal form, or
+              an IPv6 address in hexadecimal notation surrounded by square
+              brackets. Specifying a IPv6 endpoint would listen to v6 only. The
+              optional port defaults to 80 for ``endpoint`` and 443 for
+              ``ssl_endpoint``. Can be specified multiple times as in
+              ``endpoint=[::1] endpoint=192.168.0.100:8000``.
 
 :Type: Integer
 :Default: None
