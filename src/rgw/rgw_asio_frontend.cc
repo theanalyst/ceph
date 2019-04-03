@@ -258,6 +258,10 @@ class AsioFrontend {
   std::unique_ptr<dmc::ClientConfig> client_config;
   void accept(Listener& listener, boost::system::error_code ec);
 
+  using ip_proto_t = tcp::endpoint::protocol_type;
+  template <typename Iter>
+  int process_ports(Iter begin, Iter end,
+		    ip_proto_t p=tcp::v4(), bool use_ssl=false);
  public:
   AsioFrontend(const RGWProcessEnv& env, RGWFrontendConfig* conf,
 	       dmc::SchedulerCtx& sched_ctx)
@@ -370,6 +374,24 @@ static int drop_privileges(CephContext *ctx)
   return 0;
 }
 
+template <typename Iter>
+int AsioFrontend::process_ports(Iter begin, Iter end,
+				ip_proto_t p, bool use_ssl)
+{
+  boost::system::error_code ec;
+  for (auto it = begin; it != end; ++it) {
+    auto port = parse_port(it->second.c_str(), ec);
+    if (ec) {
+      lderr(ctx()) << "failed to parse port=" << it->second << dendl;
+      return -ec.value();
+    }
+    listeners.emplace_back(context);
+    listeners.back().endpoint = tcp::endpoint(p, port);
+    listeners.back().use_ssl = use_ssl;
+  }
+  return 0;
+}
+
 int AsioFrontend::init()
 {
   boost::system::error_code ec;
@@ -384,25 +406,15 @@ int AsioFrontend::init()
 
   // parse endpoints
   auto ports = config.equal_range("port");
-  for (auto i = ports.first; i != ports.second; ++i) {
-    auto port = parse_port(i->second.c_str(), ec);
-    if (ec) {
-      lderr(ctx()) << "failed to parse port=" << i->second << dendl;
-      return -ec.value();
-    }
-    listeners.emplace_back(context);
-    listeners.back().endpoint.port(port);
+  int rv = process_ports(ports.first, ports.second);
+  if (rv < 0) {
+    return rv;
   }
 
   auto v6_ports = config.equal_range("v6_port");
-  for (auto i = v6_ports.first; i != v6_ports.second; ++i) {
-    auto port = parse_port(i->second.c_str(), ec);
-    if (ec) {
-      lderr(ctx()) << "failed to parse v6_port=" << i->second << dendl;
-      return -ec.value();
-    }
-    listeners.emplace_back(context);
-    listeners.back().endpoint = tcp::endpoint(tcp::v6(), port);
+  rv = process_ports(v6_ports.first, v6_ports.second, tcp::v6());
+  if (rv < 0) {
+    return rv;
   }
 
   auto endpoints = config.equal_range("endpoint");
@@ -499,43 +511,29 @@ int AsioFrontend::init_ssl()
 
   // parse ssl endpoints
   auto ports = config.equal_range("ssl_port");
-  for (auto i = ports.first; i != ports.second; ++i) {
-    if (!have_cert) {
-      lderr(ctx()) << "no ssl_certificate configured for ssl_port" << dendl;
-      return -EINVAL;
-    }
-    auto port = parse_port(i->second.c_str(), ec);
-    if (ec) {
-      lderr(ctx()) << "failed to parse ssl_port=" << i->second << dendl;
-      return -ec.value();
-    }
-    listeners.emplace_back(context);
-    listeners.back().endpoint.port(port);
-    listeners.back().use_ssl = true;
-  }
-
-  auto ssl_ports = config.equal_range("ssl_v6_port");
-  for (auto i = ssl_ports.first; i != ssl_ports.second; ++i) {
-    if (!have_cert) {
-      lderr(ctx()) << "no ssl_certificate configured for ssl_port" << dendl;
-      return -EINVAL;
-    }
-    auto port = parse_port(i->second.c_str(), ec);
-    if (ec) {
-      lderr(ctx()) << "failed to parse ssl_port=" << i->second << dendl;
-      return -ec.value();
-    }
-    listeners.emplace_back(context);
-    listeners.back().endpoint = tcp::endpoint(tcp::v6(), port);;
-    listeners.back().use_ssl = true;
-  }
-
+  auto v6_ports = config.equal_range("ssl_v6_port");
   auto endpoints = config.equal_range("ssl_endpoint");
+
+  auto has_elt = [](auto &&it) { return it.first != it.second;};
+
+  if ((has_elt(ports) || has_elt(v6_ports) || has_elt(endpoints))
+      && !have_cert) {
+    lderr(ctx()) << "no ssl_certificate configured for ssl_port" << dendl;
+    return -EINVAL;
+  }
+
+  int r = process_ports(ports.first, ports.second, tcp::v4(), true);
+  if (r < 0) {
+    return r;
+  }
+
+  r = process_ports(v6_ports.first, v6_ports.second, tcp::v6(), true);
+  if (r < 0) {
+    return r;
+  }
+
+
   for (auto i = endpoints.first; i != endpoints.second; ++i) {
-    if (!have_cert) {
-      lderr(ctx()) << "no ssl_certificate configured for ssl_endpoint" << dendl;
-      return -EINVAL;
-    }
     auto endpoint = parse_endpoint(i->second, 443, ec);
     if (ec) {
       lderr(ctx()) << "failed to parse ssl_endpoint=" << i->second << dendl;
