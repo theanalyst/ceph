@@ -260,16 +260,19 @@ class LocalRemote(object):
             'adjust-ulimits', 'ceph-coverage', 'timeout'}]
 
         # Adjust binary path prefix if given a bare program name
-        if "/" not in args[0]:
-            # If they asked for a bare binary name, and it exists
-            # in our built tree, use the one there.
-            local_bin = os.path.join(BIN_PREFIX, args[0])
-            if os.path.exists(local_bin):
-                args = [local_bin] + args[1:]
-            else:
-                log.debug("'{0}' is not a binary in the Ceph build dir".format(
-                    args[0]
-                ))
+        try:
+            if "/" not in args[0]:
+                # If they asked for a bare binary name, and it exists
+                # in our built tree, use the one there.
+                local_bin = os.path.join(BIN_PREFIX, args[0])
+                if os.path.exists(local_bin):
+                    args = [local_bin] + args[1:]
+                else:
+                    log.debug("'{0}' is not a binary in the Ceph build dir".format(
+                        args[0]
+                    ))
+        except:
+            log.debug("some error trying to parse the first args")
 
         log.info("Running {0}".format(args))
 
