@@ -90,7 +90,6 @@ def create_users(ctx, config):
         #log.info("abhi: client is ", client)
         s3tests_conf = config['rgw_scheduler_tests_conf'][client]
         s3tests_conf.setdefault('DEFAULT', {})
-        s3tests_conf.setdefault('auth_type', 's3')
         for section, user in users.iteritems():
             _config_user(s3tests_conf, section, '{user}.{client}'.format(user=user, client=client))
             log.debug('Creating user {user} on {host}'.format(user=user, host=client))
@@ -204,19 +203,13 @@ def run_tests(ctx, config):
     # civetweb > 1.8 && beast parsers are strict on rfc2616
     for client, client_config in config.iteritems():
         (remote,) = ctx.cluster.only(client).remotes.keys()
-        args = [
-            'TEST_CONF={tdir}/archive/rgw-scheduler-tests.{client}.conf'.format(tdir=testdir, client=client),
-            ]
-        # the 'requests' library comes with its own ca bundle to verify ssl
-        # certificates - override that to use the system's ca bundle, which
-        # is where the ssl task installed this certificate
-        if remote.os.package_type == 'deb':
-            args += ['REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt']
-        else:
-            args += ['REQUESTS_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt']
+        args = [run.Raw('TEST_CONF={tdir}/archive/rgw-scheduler-tests.{client}.conf'.format(tdir=testdir, client=client)),
+        ]
         args += [
             '{tdir}/rgw-scheduler-tests/scheduler-venv/bin/pytest'.format(tdir=testdir),
-            '-v']
+            '-v',
+            '{tdir}/rgw-scheduler-tests/scheduler/'.format(tdir=testdir)
+        ]
         if client_config is not None and 'extra_args' in client_config:
             args.extend(client_config['extra_args'])
 
@@ -292,12 +285,14 @@ def task(ctx, config):
     for client in clients:
         endpoint = ctx.rgw.role_endpoints.get(client)
         assert endpoint, 's3tests: no rgw endpoint for {}'.format(client)
-
+        #log.debug('abhi got endpoint', endpoint)
         rgw_scheduler_tests_conf[client] = ConfigObj(
             indent_type='',
             infile={
                 'DEFAULT': {
-                    'req_count': 100
+                    'req_count': 100,
+                    'base_url' : endpoint.url(),
+                    'auth_type' : 's3',
                 }
                 }
             )
