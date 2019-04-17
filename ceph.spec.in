@@ -46,7 +46,6 @@
 %endif
 %endif
 %endif
-%endif
 
 %if %{with selinux}
 # get selinux policy version
