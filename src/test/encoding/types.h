@@ -292,8 +292,9 @@ TYPE(RGWObjManifest)
 TYPE(RGWOLHInfo)
 TYPE(RGWZoneGroup)
 TYPE(RGWZone)
-TYPE(RGWZoneParams)     
-   
+TYPE(RGWZoneParams)
+TYPE(objexp_hint_entry)
+
 #include "rgw/rgw_acl.h"
 TYPE(ACLPermission)
 TYPE(ACLGranteeType)
@@ -443,6 +444,9 @@ TYPE(cls_refcount_put_op)
 TYPE(cls_refcount_read_op)
 TYPE(cls_refcount_read_ret)
 TYPE(cls_refcount_set_op)
+
+#include "cls/timeindex/cls_timeindex_types.h"
+TYPE(cls_timeindex_entry)
 
 #include "journal/Entry.h"
 TYPE(journal::Entry)
