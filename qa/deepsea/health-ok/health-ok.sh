@@ -24,7 +24,6 @@ set +x
 SCRIPTNAME=$(basename ${0})
 BASEDIR=$(readlink -f "$(dirname ${0})")
 test -d $BASEDIR
-[[ $BASEDIR =~ \/health-ok$ ]]
 
 source $BASEDIR/common/common.sh
 
@@ -34,19 +33,20 @@ function usage {
     echo "for use in SUSE Enterprise Storage testing"
     echo
     echo "Usage:"
-    echo "  $SCRIPTNAME [-h,--help] [--cli] [--client-nodes=X]"
-    echo "  [--mds] [--min-nodes=X] [--nfs-ganesha] [--no-update]"
-    echo "  [--openstack] [--profile=X] [--rbd] [--rgw] [--ssl]"
-    echo "  [--tuned=X]"
+    echo "  $SCRIPTNAME [-h,--help] [--cli] [--client-nodes=X] [--igw] [--mds]"
+    echo "  [--min-nodes=X] [--nfs-ganesha] [--no-update] [--openattic]"
+    echo "  [--openstack] [--profile=X] [--rbd] [--rgw] [--ssl] [--tuned=X]"
     echo
     echo "Options:"
     echo "    --cli           Use DeepSea CLI"
     echo "    --client-nodes  Number of client (non-cluster) nodes"
     echo "    --help          Display this usage message"
+    echo "    --igw           Deploy IGW"
     echo "    --mds           Deploy MDS"
     echo "    --min-nodes     Minimum number of nodes"
     echo "    --nfs-ganesha   Deploy NFS-Ganesha"
     echo "    --no-update     Use no-update-no-reboot Stage 0 alt default"
+    echo "    --openattic     Deploy openATTIC"
     echo "    --openstack     Pre-create pools for OpenStack functests"
     echo "    --profile       Storage/OSD profile (see below)"
     echo "    --rbd           Modify ceph.conf for rbd integration testing"
@@ -69,7 +69,7 @@ function usage {
 assert_enhanced_getopt
 
 TEMP=$(getopt -o h \
---long "cli,client-nodes:,help,igw,mds,min-nodes:,nfs-ganesha,no-update,openstack,profile:,rbd,rgw,ssl,start-stage:,teuthology,tuned:" \
+--long "cli,client-nodes:,help,igw,mds,min-nodes:,nfs-ganesha,no-update,openattic,openstack,profile:,rbd,rgw,ssl,start-stage:,teuthology,tuned:" \
 -n 'health-ok.sh' -- "$@")
 
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
@@ -82,8 +82,10 @@ CLI=""
 CLIENT_NODES=0
 STORAGE_PROFILE="default"
 CUSTOM_STORAGE_PROFILE=""
+IGW=""
 MDS=""
 MIN_NODES=1
+OPENATTIC=""
 OPENSTACK=""
 NFS_GANESHA=""
 NO_UPDATE=""
@@ -98,10 +100,12 @@ while true ; do
         --cli) CLI="$1" ; shift ;;
         --client-nodes) shift ; CLIENT_NODES=$1 ; shift ;;
         -h|--help) usage ;;    # does not return
+        --igw) IGW="$1" ; shift ;;
         --mds) MDS="$1" ; shift ;;
         --min-nodes) shift ; MIN_NODES=$1 ; shift ;;
         --nfs-ganesha) NFS_GANESHA="$1" ; shift ;;
         --no-update) NO_UPDATE="$1" ; shift ;;
+        --openattic) OPENATTIC="$1" ; shift ;;
         --openstack) OPENSTACK="$1" ; shift ;;
         --profile) shift ; STORAGE_PROFILE=$1 ; shift ;;
         --rbd) RBD="$1" ; shift ;;
@@ -131,8 +135,10 @@ echo "health-ok.sh running with the following configuration:"
 test -n "$CLI" && echo "- CLI"
 echo "- CLIENT_NODES ->$CLIENT_NODES<-"
 echo "- MIN_NODES ->$MIN_NODES<-"
+test -n "$IGW" && echo "- IGW"
 test -n "$MDS" && echo "- MDS"
 test -n "$NFS_GANESHA" && echo "- NFS-Ganesha"
+test -n "$OPENATTIC" && echo "- openATTIC"
 test -n "$OPENSTACK" && echo "- OpenStack test pools will be pre-created"
 echo "- PROFILE ->$STORAGE_PROFILE<-"
 test -n "$RBD" && echo "- RBD"
@@ -194,7 +200,7 @@ if [ "$NFS_GANESHA" ] ; then
         nfs_ganesha_umount
         sleep 10
     done
-    REPEAT_STAGE_0="yes, please"
+    test -z "$OPENATTIC" && REPEAT_STAGE_0="yes, please"
 fi
 test "$REPEAT_STAGE_0" && run_stage_0 "$CLI" # exercise ceph.restart orchestration
 

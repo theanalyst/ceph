@@ -68,24 +68,14 @@ function run_stage_2 {
     test "$STAGE_SUCCEEDED"
 }
 
-function _disable_tuned {
-    local prefix=/srv/salt/ceph/tuned
-    mv $prefix/mgr/default.sls $prefix/mgr/default.sls-MOVED
-    mv $prefix/mon/default.sls $prefix/mon/default.sls-MOVED
-    mv $prefix/osd/default.sls $prefix/osd/default.sls-MOVED
-    mv $prefix/mgr/default-off.sls $prefix/mgr/default.sls
-    mv $prefix/mon/default-off.sls $prefix/mon/default.sls
-    mv $prefix/osd/default-off.sls $prefix/osd/default.sls
-}
-
 function run_stage_3 {
     cat_global_conf
     lsblk_on_storage_node
     if [ "$TUNED" ] ; then
         echo "WWWW: tuned will be deployed as usual"
     else
-        echo "WWWW: tuned will NOT be deployed"
-        _disable_tuned
+        echo "WWWW: tuned was not to have been deployed, but disabling it is a WIP"
+        # _disable_tuned
     fi
     _run_stage 3 "$@"
     lsblk_on_storage_node
@@ -154,13 +144,6 @@ function ceph_conf_mon_allow_pool_delete {
     echo "Adjusting ceph.conf to allow pool deletes"
     cat <<'EOF' >> /srv/salt/ceph/configuration/files/ceph.conf.d/global.conf
 mon allow pool delete = true
-EOF
-}
-
-function ceph_conf_dashboard {
-    echo "Adjusting ceph.conf for deployment of dashboard MGR module"
-    cat <<'EOF' >> /srv/salt/ceph/configuration/files/ceph.conf.d/mon.conf
-mgr initial modules = dashboard
 EOF
 }
 
