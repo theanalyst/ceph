@@ -1863,6 +1863,96 @@ int RGWBucketAdminOp::clear_stale_instances(RGWRados *store,
   return process_stale_instances(store, op_state, flusher, process_f);
 }
 
+static bool has_object_expired(RGWRados *store, const RGWBucketInfo& bucket_info,
+			       const rgw_obj_key& key)
+{
+  RGWObjectCtx obj_ctx(store);
+  rgw_obj obj(bucket_info.bucket, key);
+
+  RGWRados::Object op_target(store, bucket_info, obj_ctx, obj);
+  RGWRados::Object::Read rop(&op_target);
+
+  bufferlist delete_at_bl;
+  int ret = rop.get_attr(RGW_ATTR_DELETE_AT, delete_at_bl);
+  if (ret < 0) {
+    return false;  // no delete at attr, proceed
+  }
+
+  utime_t delete_at;
+  try {
+    auto iter = delete_at_bl.cbegin();
+    decode(delete_at, iter);
+  } catch (buffer::error& err) {
+    lderr(store->ctx()) << "ERROR " << __func__ << ": failed to decode " RGW_ATTR_DELETE_AT " attr" << dendl;
+  }
+
+  if (delete_at <= ceph_clock_now() && !delete_at.is_zero()) {
+    return true;
+  }
+
+  return false;
+}
+
+static int fix_bucket_obj_expiry(RGWRados *store, const RGWBucketInfo& bucket_info,
+				 RGWFormatterFlusher& flusher)
+{
+  if (bucket_info.bucket.bucket_id == bucket_info.bucket.marker) {
+    lderr(store->ctx()) << "Not a resharded bucket skipping" << dendl;
+    return 0;  // not a resharded bucket, move along
+  }
+
+  Formatter *formatter = flusher.get_formatter();
+  formatter->open_array_section("expired_deletion_status");
+  auto sg = make_scope_guard([&formatter] {
+			       formatter->close_section();
+			       formatter->flush(std::cout);
+			     });
+
+  RGWRados::Bucket target(store, bucket_info);
+  RGWRados::Bucket::List list_op(&target);
+
+  list_op.params.list_versions = bucket_info.versioned();
+  list_op.params.allow_unordered = true;
+
+  constexpr auto max_objects = 1000;
+  bool is_truncated {false};
+  do {
+    std::vector<rgw_bucket_dir_entry> objs;
+
+    int ret = list_op.list_objects(max_objects, &objs, nullptr, &is_truncated);
+    if (ret < 0) {
+      lderr(store->ctx()) << "ERROR failed to list objects in the bucket" << dendl;
+      return ret;
+    }
+    for (const auto& obj : objs) {
+      rgw_obj_key key(obj.key);
+      if (has_object_expired(store, bucket_info, key)) {
+	ret = rgw_remove_object(store, bucket_info, bucket_info.bucket, key);
+	formatter->open_object_section("object_status");
+	formatter->dump_string("object", key.name);
+	formatter->dump_int("status", ret);
+	formatter->close_section();  // object_status
+      }
+    }
+    formatter->flush(cout); // regularly flush every 1k entries
+  } while (is_truncated);
+
+  return 0;
+}
+
+int RGWBucketAdminOp::fix_obj_expiry(RGWRados *store, RGWBucketAdminOpState& op_state,
+				     RGWFormatterFlusher& flusher)
+{
+  RGWBucket admin_bucket;
+  int ret = admin_bucket.init(store, op_state);
+  if (ret < 0) {
+    lderr(store->ctx()) << "failed to initialize bucket" << dendl;
+    return ret;
+  }
+
+  return fix_bucket_obj_expiry(store, admin_bucket.get_bucket_info(), flusher);
+}
+
 void rgw_data_change::dump(Formatter *f) const
 {
   string type;

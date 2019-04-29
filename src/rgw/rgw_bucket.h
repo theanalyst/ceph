@@ -310,6 +310,8 @@ public:
   int get_policy(RGWBucketAdminOpState& op_state, RGWAccessControlPolicy& policy);
 
   void clear_failure() { failure = false; }
+
+  const RGWBucketInfo& get_bucket_info() const { return bucket_info; }
 };
 
 class RGWBucketAdminOp
@@ -342,6 +344,8 @@ public:
 
   static int clear_stale_instances(RGWRados *store, RGWBucketAdminOpState& op_state,
 				   RGWFormatterFlusher& flusher);
+  static int fix_obj_expiry(RGWRados *store, RGWBucketAdminOpState& op_state,
+			    RGWFormatterFlusher& flusher);
 };
 
 
