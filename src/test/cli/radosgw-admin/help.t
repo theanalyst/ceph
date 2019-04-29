@@ -34,6 +34,7 @@
     object stat                stat an object for its metadata
     object unlink              unlink object from bucket index
     objects expire             run expired objects cleanup
+    objects expire-fix         delete expired objects for resharded buckets
     period delete              delete a period
     period get                 get period info
     period get-current         get current period info

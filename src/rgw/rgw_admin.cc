@@ -95,6 +95,7 @@ void usage()
   cout << "  object stat                stat an object for its metadata\n";
   cout << "  object unlink              unlink object from bucket index\n";
   cout << "  objects expire             run expired objects cleanup\n";
+  cout << "  objects expire-fix         delete expired objects for resharded buckets\n";
   cout << "  period delete              delete a period\n";
   cout << "  period get                 get period info\n";
   cout << "  period get-current         get current period info\n";
@@ -385,6 +386,7 @@ enum {
   OPT_OBJECT_STAT,
   OPT_OBJECT_REWRITE,
   OPT_OBJECTS_EXPIRE,
+  OPT_OBJECTS_EXPIRE_FIX,
   OPT_BI_GET,
   OPT_BI_PUT,
   OPT_BI_LIST,
@@ -680,9 +682,11 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
       return OPT_OBJECT_STAT;
     if (strcmp(cmd, "rewrite") == 0)
       return OPT_OBJECT_REWRITE;
-  } else if (strcmp(prev_cmd, "objects") == 0) {
+  }  else if (strcmp(prev_cmd, "objects") == 0) {
     if (strcmp(cmd, "expire") == 0)
       return OPT_OBJECTS_EXPIRE;
+    if (strcmp(cmd, "expire-fix") == 0)
+      return OPT_OBJECTS_EXPIRE_FIX;
   } else if (strcmp(prev_cmd, "olh") == 0) {
     if (strcmp(cmd, "get") == 0)
       return OPT_OLH_GET;
@@ -5797,6 +5801,10 @@ next:
       cerr << "ERROR: process_expire_objects() processing returned error." << std::endl;
       return 1;
     }
+  }
+
+  if (opt_cmd == OPT_OBJECTS_EXPIRE_FIX) {
+    RGWBucketAdminOp::fix_obj_expiry(store, bucket_op, f);
   }
 
   if (opt_cmd == OPT_BUCKET_REWRITE) {
