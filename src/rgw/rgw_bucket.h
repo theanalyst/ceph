@@ -345,7 +345,7 @@ public:
   static int clear_stale_instances(RGWRados *store, RGWBucketAdminOpState& op_state,
 				   RGWFormatterFlusher& flusher);
   static int fix_obj_expiry(RGWRados *store, RGWBucketAdminOpState& op_state,
-			    RGWFormatterFlusher& flusher);
+			    RGWFormatterFlusher& flusher, bool dry_run = false);
 };
 
 

@@ -1894,7 +1894,7 @@ static bool has_object_expired(RGWRados *store, const RGWBucketInfo& bucket_info
 }
 
 static int fix_bucket_obj_expiry(RGWRados *store, const RGWBucketInfo& bucket_info,
-				 RGWFormatterFlusher& flusher)
+				 RGWFormatterFlusher& flusher, bool dry_run)
 {
   if (bucket_info.bucket.bucket_id == bucket_info.bucket.marker) {
     lderr(store->ctx()) << "Not a resharded bucket skipping" << dendl;
@@ -1927,10 +1927,14 @@ static int fix_bucket_obj_expiry(RGWRados *store, const RGWBucketInfo& bucket_in
     for (const auto& obj : objs) {
       rgw_obj_key key(obj.key);
       if (has_object_expired(store, bucket_info, key)) {
-	ret = rgw_remove_object(store, bucket_info, bucket_info.bucket, key);
 	formatter->open_object_section("object_status");
 	formatter->dump_string("object", key.name);
-	formatter->dump_int("status", ret);
+
+	if (!dry_run) {
+	  ret = rgw_remove_object(store, bucket_info, bucket_info.bucket, key);
+	  formatter->dump_int("status", ret);
+	}
+
 	formatter->close_section();  // object_status
       }
     }
@@ -1941,7 +1945,7 @@ static int fix_bucket_obj_expiry(RGWRados *store, const RGWBucketInfo& bucket_in
 }
 
 int RGWBucketAdminOp::fix_obj_expiry(RGWRados *store, RGWBucketAdminOpState& op_state,
-				     RGWFormatterFlusher& flusher)
+				     RGWFormatterFlusher& flusher, bool dry_run)
 {
   RGWBucket admin_bucket;
   int ret = admin_bucket.init(store, op_state);
@@ -1950,7 +1954,7 @@ int RGWBucketAdminOp::fix_obj_expiry(RGWRados *store, RGWBucketAdminOpState& op_
     return ret;
   }
 
-  return fix_bucket_obj_expiry(store, admin_bucket.get_bucket_info(), flusher);
+  return fix_bucket_obj_expiry(store, admin_bucket.get_bucket_info(), flusher, dry_run);
 }
 
 void rgw_data_change::dump(Formatter *f) const
