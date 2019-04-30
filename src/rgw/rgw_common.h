@@ -1333,8 +1333,8 @@ struct RGWBucketInfo {
   void decode_json(JSONObj *obj);
 
   bool versioned() const { return (flags & BUCKET_VERSIONED) != 0; }
-  int versioning_status() { return flags & (BUCKET_VERSIONED | BUCKET_VERSIONS_SUSPENDED); }
-  bool versioning_enabled() { return versioning_status() == BUCKET_VERSIONED; }
+  int versioning_status() const { return flags & (BUCKET_VERSIONED | BUCKET_VERSIONS_SUSPENDED); }
+  bool versioning_enabled() const { return versioning_status() == BUCKET_VERSIONED; }
   bool datasync_flag_enabled() const { return (flags & BUCKET_DATASYNC_DISABLED) == 0; }
 
   bool has_swift_versioning() const {
