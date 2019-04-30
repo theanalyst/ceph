@@ -1199,30 +1199,25 @@ int RGWBucket::check_index(RGWBucketAdminOpState& op_state,
   return 0;
 }
 
+template <typename T>
+static int decode_bl(RGWRados* store, bufferlist& bl, T& t)
+{
+  auto iter = bl.begin();
+  try {
+    t.decode(iter);
+  } catch (buffer::error& err) {
+    ldout(store->ctx(), 0) << "ERROR: caught buffer::error, could not decode bufferlist"
+			   << dendl;
+    return -EIO;
+  }
+  return 0;
+}
 
 int RGWBucket::policy_bl_to_stream(bufferlist& bl, ostream& o)
 {
   RGWAccessControlPolicy_S3 policy(g_ceph_context);
-  bufferlist::iterator iter = bl.begin();
-  try {
-    policy.decode(iter);
-  } catch (buffer::error& err) {
-    dout(0) << "ERROR: caught buffer::error, could not decode policy" << dendl;
-    return -EIO;
-  }
+  decode_bl(store, bl, policy);
   policy.to_xml(o);
-  return 0;
-}
-
-static int policy_decode(RGWRados *store, bufferlist& bl, RGWAccessControlPolicy& policy)
-{
-  bufferlist::iterator iter = bl.begin();
-  try {
-    policy.decode(iter);
-  } catch (buffer::error& err) {
-    ldout(store->ctx(), 0) << "ERROR: caught buffer::error, could not decode policy" << dendl;
-    return -EIO;
-  }
   return 0;
 }
 
