@@ -1249,14 +1249,12 @@ int RGWBucket::get_policy(RGWBucketAdminOpState& op_state, RGWAccessControlPolic
     bufferlist bl;
     rgw_obj obj(bucket, object_name);
 
-    RGWRados::Object op_target(store, bucket_info, obj_ctx, obj);
-    RGWRados::Object::Read rop(&op_target);
-
-    int ret = rop.get_attr(RGW_ATTR_ACL, bl);
-    if (ret < 0)
+    ret = rgw_object_get_attr(store, bucket_info, obj, RGW_ATTR_ACL, bl);
+    if (ret < 0){
       return ret;
+    }
 
-    return policy_decode(store, bl, policy);
+    return decode_bl(store, bl, policy);
   }
 
   map<string, bufferlist>::iterator aiter = attrs.find(RGW_ATTR_ACL);
@@ -1264,7 +1262,7 @@ int RGWBucket::get_policy(RGWBucketAdminOpState& op_state, RGWAccessControlPolic
     return -ENOENT;
   }
 
-  return policy_decode(store, aiter->second, policy);
+  return decode_bl(store, aiter->second, policy);
 }
 
 
@@ -1870,26 +1868,19 @@ int RGWBucketAdminOp::clear_stale_instances(RGWRados *store,
 }
 
 static bool has_object_expired(RGWRados *store, const RGWBucketInfo& bucket_info,
-			       const rgw_obj_key& key)
+			       const rgw_obj_key& key, utime_t& delete_at)
 {
-  RGWObjectCtx obj_ctx(store);
   rgw_obj obj(bucket_info.bucket, key);
-
-  RGWRados::Object op_target(store, bucket_info, obj_ctx, obj);
-  RGWRados::Object::Read rop(&op_target);
-
   bufferlist delete_at_bl;
-  int ret = rop.get_attr(RGW_ATTR_DELETE_AT, delete_at_bl);
+
+  int ret = rgw_object_get_attr(store, bucket_info, obj, RGW_ATTR_DELETE_AT, delete_at_bl);
   if (ret < 0) {
     return false;  // no delete at attr, proceed
   }
 
-  utime_t delete_at;
-  try {
-    auto iter = delete_at_bl.cbegin();
-    decode(delete_at, iter);
-  } catch (buffer::error& err) {
-    lderr(store->ctx()) << "ERROR " << __func__ << ": failed to decode " RGW_ATTR_DELETE_AT " attr" << dendl;
+  ret = decode_bl(store, delete_at_bl, delete_at);
+  if (ret < 0) {
+    return false;  // failed to parse
   }
 
   if (delete_at <= ceph_clock_now() && !delete_at.is_zero()) {
@@ -1932,9 +1923,11 @@ static int fix_bucket_obj_expiry(RGWRados *store, const RGWBucketInfo& bucket_in
     }
     for (const auto& obj : objs) {
       rgw_obj_key key(obj.key);
-      if (has_object_expired(store, bucket_info, key)) {
+      utime_t delete_at;
+      if (has_object_expired(store, bucket_info, key, delete_at)) {
 	formatter->open_object_section("object_status");
 	formatter->dump_string("object", key.name);
+	formatter->dump_stream("delete_at") << delete_at;
 
 	if (!dry_run) {
 	  ret = rgw_remove_object(store, bucket_info, bucket_info.bucket, key);
