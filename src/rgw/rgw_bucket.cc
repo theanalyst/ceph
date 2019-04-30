@@ -1226,6 +1226,17 @@ static int policy_decode(RGWRados *store, bufferlist& bl, RGWAccessControlPolicy
   return 0;
 }
 
+int rgw_object_get_attr(RGWRados* store, const RGWBucketInfo& bucket_info,
+			const rgw_obj& obj, const char* attr_name,
+			bufferlist& out_bl)
+{
+  RGWObjectCtx obj_ctx(store);
+  RGWRados::Object op_target(store, bucket_info, obj_ctx, obj);
+  RGWRados::Object::Read rop(&op_target);
+
+  return rop.get_attr(attr_name, out_bl);
+}
+
 int RGWBucket::get_policy(RGWBucketAdminOpState& op_state, RGWAccessControlPolicy& policy)
 {
   std::string object_name = op_state.get_object_name();
