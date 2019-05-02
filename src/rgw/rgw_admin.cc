@@ -5812,11 +5812,18 @@ next:
 
   if (opt_cmd == OPT_OBJECTS_EXPIRE_STALE_LIST) {
     ret = RGWBucketAdminOp::fix_obj_expiry(store, bucket_op, f, true);
-    return ret;
+    if (ret < 0) {
+      cerr << "ERROR: listing returned " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
   }
 
   if (opt_cmd == OPT_OBJECTS_EXPIRE_STALE_RM) {
     ret = RGWBucketAdminOp::fix_obj_expiry(store, bucket_op, f, false);
+    if (ret < 0) {
+      cerr << "ERROR: removing returned " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
   }
 
   if (opt_cmd == OPT_BUCKET_REWRITE) {
