@@ -37,6 +37,7 @@ function _run_stage_cli {
     local deepsea_cli_output_path="/tmp/deepsea.${stage_num}.log"
 
     set +e
+    echo "DEV_ENV ->$DEV_ENV<-"
     set -x
     timeout $STAGE_TIMEOUT_DURATION \
         deepsea \
@@ -69,6 +70,7 @@ function _run_stage_non_cli {
     local stage_log_path="/tmp/stage.${stage_num}.log"
 
     set +e
+    echo "DEV_ENV ->$DEV_ENV<-"
     set -x
     timeout $STAGE_TIMEOUT_DURATION \
         salt-run \

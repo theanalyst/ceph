@@ -792,6 +792,14 @@ python-rados, python-rbd, python-rgw and python-cephfs. Packages still
 depending on python-ceph should be fixed to depend on python-rados,
 python-rbd, python-rgw or python-cephfs instead.
 
+%if 0%{?suse_version}
+%package qa-health-ok
+Summary:        DeepSea integration test automation scripts
+Group:          System/Libraries
+%description qa-health-ok
+This package contains health-ok.sh and associated test automation scripts.
+%endif
+
 #################################################################################
 # common
 #################################################################################
@@ -970,6 +978,10 @@ mkdir -p %{buildroot}%{_localstatedir}/lib/ceph/bootstrap-rbd
 %if 0%{?suse_version}
 # create __pycache__ directories and their contents
 %py3_compile %{buildroot}%{python3_sitelib}
+# ceph-qa-health-ok
+install -d -m 755 %{buildroot}%{_libexecdir}/deepsea/qa/common
+install -m 755 qa/deepsea/health-ok/*.sh %{buildroot}%{_libexecdir}/deepsea/qa/
+install -m 644 qa/deepsea/health-ok/common/*.sh %{buildroot}%{_libexecdir}/deepsea/qa/common/
 %endif
 
 %clean
@@ -1817,6 +1829,10 @@ exit 0
 # We need an empty %%files list for python-ceph-compat, to tell rpmbuild to
 # actually build this meta package.
 
+%if 0%{?suse_version}
+%files qa-health-ok
+%{_libexecdir}/deepsea
+%endif
 
 %changelog
 # nospeccleaner

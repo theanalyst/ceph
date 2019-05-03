@@ -28,7 +28,6 @@ set +x
 SCRIPTNAME=$(basename ${0})
 BASEDIR=$(readlink -f "$(dirname ${0})")
 test -d $BASEDIR
-[[ $BASEDIR =~ \/health-ok$ ]]
 
 source $BASEDIR/common/common.sh
 

@@ -198,7 +198,6 @@ function deploy_ceph {
         run_stage_2 "$CLI"
         ceph_conf_small_cluster
         ceph_conf_mon_allow_pool_delete
-        ceph_conf_dashboard
         test "$RBD" && ceph_conf_upstream_rbd_default_features
     fi
     if [ "$START_STAGE" -le "3" ] ; then
@@ -206,7 +205,7 @@ function deploy_ceph {
         pre_create_pools
         ceph_cluster_status
         test "$RBD" && ceph_test_librbd_can_be_run
-        if [ -z "$MDS" -a -z "$NFS_GANESHA" -a -z "$RGW" ] ; then
+        if [ -z "$MDS" -a -z "$NFS_GANESHA" -a -z "$RGW" -a -z "$IGW" -a -z "$OPENATTIC" ] ; then
             echo "WWWW"
             echo "Stage 3 OK, no roles requiring Stage 4: $DEPLOY_PHASE_COMPLETE_MESSAGE"
             return 0
