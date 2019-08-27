@@ -3551,6 +3551,25 @@ void RGWGetObjLegalHold_ObjStore_S3::send_response()
   rgw_flush_formatter_and_reset(s, s->formatter);
 }
 
+void RGWGetBucketPolicyStatus_ObjStore_S3::send_response()
+{
+  if (op_ret) {
+    set_req_state_err(s, op_ret);
+  }
+  dump_errno(s);
+  end_header(s, this, "application/xml");
+  dump_start(s);
+
+  s->formatter->open_object_section_in_ns("PolicyStatus", XMLNS_AWS_S3);
+  // https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGETPolicyStatus.html
+  // mentions TRUE and FALSE, but boto/aws official clients seem to want lower
+  // case which is returned by AWS as well; so let's be bug to bug compatible
+  // with the API
+  s->formatter->dump_string("IsPublic", isPublic ? "true" : "false");
+  s->formatter->close_section();
+  rgw_flush_formatter_and_reset(s, s->formatter);
+
+}
 
 RGWOp *RGWHandler_REST_Service_S3::op_get()
 {
@@ -3653,6 +3672,8 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_get()
     return new RGWGetBucketTags_ObjStore_S3;
   } else if (is_object_lock_op()) {
     return new RGWGetBucketObjectLock_ObjStore_S3;
+  } else if (is_policy_status_op()) {
+    return new RGWGetBucketPolicyStatus_ObjStore_S3;
   }
   return get_obj_op(true);
 }

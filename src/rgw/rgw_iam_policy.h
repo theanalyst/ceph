@@ -101,39 +101,40 @@ static constexpr std::uint64_t s3GetObjectRetention = 57;
 static constexpr std::uint64_t s3PutObjectLegalHold = 58;
 static constexpr std::uint64_t s3GetObjectLegalHold = 59;
 static constexpr std::uint64_t s3BypassGovernanceRetention = 60;
-static constexpr std::uint64_t s3All = 61;
+static constexpr std::uint64_t s3GetBucketPolicyStatus = 61;
+static constexpr std::uint64_t s3All = 62;
 
-static constexpr std::uint64_t iamPutUserPolicy = 62;
-static constexpr std::uint64_t iamGetUserPolicy = 63;
-static constexpr std::uint64_t iamDeleteUserPolicy = 64;
-static constexpr std::uint64_t iamListUserPolicies = 65;
-static constexpr std::uint64_t iamCreateRole = 66;
-static constexpr std::uint64_t iamDeleteRole = 67;
-static constexpr std::uint64_t iamModifyRole = 68;
-static constexpr std::uint64_t iamGetRole = 69;
-static constexpr std::uint64_t iamListRoles = 70;
-static constexpr std::uint64_t iamPutRolePolicy = 71;
-static constexpr std::uint64_t iamGetRolePolicy = 72;
-static constexpr std::uint64_t iamListRolePolicies = 73;
-static constexpr std::uint64_t iamDeleteRolePolicy = 74;
-static constexpr std::uint64_t iamAll = 75;
-static constexpr std::uint64_t stsAssumeRole = 76;
-static constexpr std::uint64_t stsAssumeRoleWithWebIdentity = 77;
-static constexpr std::uint64_t stsGetSessionToken = 78;
-static constexpr std::uint64_t stsAll = 79;
+static constexpr std::uint64_t iamPutUserPolicy = 63;
+static constexpr std::uint64_t iamGetUserPolicy = 64;
+static constexpr std::uint64_t iamDeleteUserPolicy = 65;
+static constexpr std::uint64_t iamListUserPolicies = 66;
+static constexpr std::uint64_t iamCreateRole = 67;
+static constexpr std::uint64_t iamDeleteRole = 68;
+static constexpr std::uint64_t iamModifyRole = 69;
+static constexpr std::uint64_t iamGetRole = 70;
+static constexpr std::uint64_t iamListRoles = 71;
+static constexpr std::uint64_t iamPutRolePolicy = 72;
+static constexpr std::uint64_t iamGetRolePolicy = 73;
+static constexpr std::uint64_t iamListRolePolicies = 74;
+static constexpr std::uint64_t iamDeleteRolePolicy = 75;
+static constexpr std::uint64_t iamAll = 76;
+static constexpr std::uint64_t stsAssumeRole = 77;
+static constexpr std::uint64_t stsAssumeRoleWithWebIdentity = 78;
+static constexpr std::uint64_t stsGetSessionToken = 79;
+static constexpr std::uint64_t stsAll = 80;
 
-static constexpr std::uint64_t s3Count = s3BypassGovernanceRetention + 1;
+static constexpr std::uint64_t s3Count = s3All;
 static constexpr std::uint64_t allCount = stsAll + 1;
 
 using Action_t = bitset<allCount>;
 using NotAction_t = Action_t;
 
 static const Action_t None(0);
-static const Action_t s3AllValue("1111111111111111111111111111111111111111111111111111111111111");
-static const Action_t iamAllValue("111111111111100000000000000000000000000000000000000000000000000000000000000");
+static const Action_t s3AllValue("11111111111111111111111111111111111111111111111111111111111111");
+static const Action_t iamAllValue("1111111111111000000000000000000000000000000000000000000000000000000000000000");
 static const Action_t stsAllValue("1110000000000000000000000000000000000000000000000000000000000000000000000000000");
 //Modify allValue if more Actions are added
-static const Action_t allValue("11111111111111111111111111111111111111111111111111111111111111111111111111111111");
+static const Action_t allValue("111111111111111111111111111111111111111111111111111111111111111111111111111111111");
 
 namespace {
 // Please update the table in doc/radosgw/s3/authentication.rst if you
@@ -178,6 +179,7 @@ inline int op_to_perm(std::uint64_t op) {
   case s3GetBucketLogging:
   case s3GetBucketNotification:
   case s3GetBucketPolicy:
+  case s3GetBucketPolicyStatus:
   case s3GetBucketRequestPayment:
   case s3GetBucketTagging:
   case s3GetBucketVersioning:
