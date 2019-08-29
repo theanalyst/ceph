@@ -473,6 +473,8 @@ struct Policy {
 };
 
 std::ostream& operator <<(ostream& m, const Policy& p);
+bool IsPublic(const Policy& p);
+
 }
 }
 
