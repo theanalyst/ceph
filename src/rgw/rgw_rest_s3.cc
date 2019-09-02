@@ -3571,6 +3571,15 @@ void RGWGetBucketPolicyStatus_ObjStore_S3::send_response()
 
 }
 
+void RGWPutPublicAccessBlock_ObjStore_S3::send_response()
+{
+  if (op_ret) {
+    set_req_state_err(s, op_ret);
+  }
+  dump_errno(s);
+  end_header(s);
+}
+
 RGWOp *RGWHandler_REST_Service_S3::op_get()
 {
   if (is_usage_op()) {
@@ -3700,7 +3709,7 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_put()
     }
     return new RGWSetBucketWebsite_ObjStore_S3;
   }
-
+  ldout(s->cct, 0) << "ABHI op_put eval "<< dendl;
   if (is_tagging_op()) {
     return new RGWPutBucketTags_ObjStore_S3;
   } else if (is_acl_op()) {
@@ -3717,6 +3726,8 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_put()
     return nullptr;
   } else if (is_object_lock_op()) {
     return new RGWPutBucketObjectLock_ObjStore_S3;
+  } else if (is_block_public_access_op()) {
+    return new RGWPutPublicAccessBlock_ObjStore_S3;
   }
   return new RGWCreateBucket_ObjStore_S3;
 }
@@ -4601,6 +4612,7 @@ AWSGeneralAbstractor::get_auth_data_v4(const req_state* const s,
         case RGW_OP_PUT_OBJ_LEGAL_HOLD:
         case RGW_STS_GET_SESSION_TOKEN:
         case RGW_STS_ASSUME_ROLE:
+        case RGW_OP_PUT_PUBLIC_ACCESS_BLOCK:
           break;
         default:
           dout(10) << "ERROR: AWS4 completion for this operation NOT IMPLEMENTED" << dendl;

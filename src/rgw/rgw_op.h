@@ -48,6 +48,7 @@
 #include "rgw_object_lock.h"
 #include "cls/lock/cls_lock_client.h"
 #include "cls/rgw/cls_rgw_client.h"
+#include "rgw_public_acess.h"
 
 #include "services/svc_sys_obj.h"
 #include "services/svc_tier_rados.h"
@@ -2353,6 +2354,20 @@ public:
   const char* name() const override { return "get_bucket_policy_status"; }
   virtual RGWOpType get_type() override { return RGW_OP_GET_BUCKET_POLICY_STATUS; }
   virtual uint32_t op_mask() override { return RGW_OP_TYPE_READ; }
+  void execute() override;
+  dmc::client_id dmclock_client() override { return dmc::client_id::metadata; }
+};
+
+class RGWPutPublicAccessBlock : public RGWOp {
+protected:
+  bufferlist data;
+  rgw::IAM::PublicAccessConfiguration access_conf;
+public:
+  int verify_permission() override;
+  const char* name() const override { return "put_public_access_block";}
+  virtual RGWOpType get_type() override { return RGW_OP_PUT_PUBLIC_ACCESS_BLOCK; }
+  virtual uint32_t op_mask() override { return RGW_OP_TYPE_WRITE; }
+  int get_params();
   void execute() override;
   dmc::client_id dmclock_client() override { return dmc::client_id::metadata; }
 };
