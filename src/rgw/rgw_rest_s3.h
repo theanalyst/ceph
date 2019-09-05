@@ -554,7 +554,12 @@ public:
   void send_response() override;
 };
 
-class RGWPutPublicAccessBlock_ObjStore_S3 : public RGWPutPublicAccessBlock {
+class RGWPutBucketPublicAccessBlock_ObjStore_S3 : public RGWPutBucketPublicAccessBlock {
+public:
+  void send_response() override;
+};
+
+class RGWGetBucketPublicAccessBlock_ObjStore_S3 : public RGWGetBucketPublicAccessBlock {
 public:
   void send_response() override;
 };

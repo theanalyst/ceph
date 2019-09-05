@@ -123,7 +123,7 @@ static const actpair actpairs[] =
  { "s3:PutObjectRetention", s3PutObjectRetention },
  { "s3:PutObjectLegalHold", s3PutObjectLegalHold },
  { "s3:BypassGovernanceRetention", s3BypassGovernanceRetention },
- { "s3:PutPublicAccessBlock", s3PutPublicAccessBlock },
+ { "s3:PutBucketPublicAccessBlock", s3PutBucketPublicAccessBlock },
  { "s3:PutReplicationConfiguration", s3PutReplicationConfiguration },
  { "s3:RestoreObject", s3RestoreObject },
  { "iam:PutUserPolicy", iamPutUserPolicy },

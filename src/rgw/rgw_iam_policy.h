@@ -103,7 +103,12 @@ static constexpr std::uint64_t s3GetObjectLegalHold = 59;
 static constexpr std::uint64_t s3BypassGovernanceRetention = 60;
 static constexpr std::uint64_t s3GetBucketPolicyStatus = 61;
 static constexpr std::uint64_t s3PutPublicAccessBlock = 62;
-static constexpr std::uint64_t s3All = 63;
+static constexpr std::uint64_t s3GetPublicAccessBlock = 63;
+static constexpr std::uint64_t s3DeletePublicAccessBlock = 64;
+static constexpr std::uint64_t s3GetBucketPublicAccessBlock = 65;
+static constexpr std::uint64_t s3PutBucketPublicAccessBlock = 66;
+static constexpr std::uint64_t s3DeleteBucketPublicAccessBlock = 67;
+static constexpr std::uint64_t s3All = 68;
 
 static constexpr std::uint64_t iamPutUserPolicy = s3All + 1;
 static constexpr std::uint64_t iamGetUserPolicy = s3All + 2;
@@ -132,11 +137,11 @@ using Action_t = bitset<allCount>;
 using NotAction_t = Action_t;
 
 static const Action_t None(0);
-static const Action_t s3AllValue("111111111111111111111111111111111111111111111111111111111111111");
-static const Action_t iamAllValue("11111111111110000000000000000000000000000000000000000000000000000000000000000");
-static const Action_t stsAllValue("11100000000000000000000000000000000000000000000000000000000000000000000000000000");
+static const Action_t s3AllValue  ("11111111111111111111111111111111111111111111111111111111111111111111");
+static const Action_t iamAllValue ("1111111111111000000000000000000000000000000000000000000000000000000000000000000000");
+static const Action_t stsAllValue ("1110000000000000000000000000000000000000000000000000000000000000000000000000000000000");
 //Modify allValue if more Actions are added
-static const Action_t allValue("1111111111111111111111111111111111111111111111111111111111111111111111111111111111");
+static const Action_t allValue    ("111111111111111111111111111111111111111111111111111111111111111111111111111111111111111");
 
 namespace {
 // Please update the table in doc/radosgw/s3/authentication.rst if you
@@ -211,7 +216,7 @@ inline int op_to_perm(std::uint64_t op) {
   case s3PutObjectVersionAcl:
   case s3PutReplicationConfiguration:
   case s3PutBucketObjectLockConfiguration:
-  case s3PutPublicAccessBlock:
+  case s3PutBucketPublicAccessBlock:
     return RGW_PERM_WRITE_ACP;
 
   case s3All:

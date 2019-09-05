@@ -7912,23 +7912,23 @@ void RGWGetBucketPolicyStatus::execute()
     isPublic |= rgw::IAM::IsPublic(*s->iam_policy);
 }
 
-int RGWPutPublicAccessBlock::verify_permission()
+int RGWPutBucketPublicAccessBlock::verify_permission()
 {
-  if (!verify_bucket_permission(this, s, rgw::IAM::s3PutPublicAccessBlock)) {
+  if (!verify_bucket_permission(this, s, rgw::IAM::s3PutBucketPublicAccessBlock)) {
     return -EACCES;
   }
 
   return 0;
 }
 
-int RGWPutPublicAccessBlock::get_params()
+int RGWPutBucketPublicAccessBlock::get_params()
 {
   const auto max_size = s->cct->_conf->rgw_max_put_param_size;
   std::tie(op_ret, data) = rgw_rest_read_all_input(s, max_size, false);
   return op_ret;
 }
 
-void RGWPutPublicAccessBlock::execute()
+void RGWPutBucketPublicAccessBlock::execute()
 {
   RGWXMLDecoder::XMLParser parser;
   if (!parser.init()) {
@@ -7972,4 +7972,34 @@ void RGWPutPublicAccessBlock::execute()
       return store->ctl()->bucket->set_bucket_instance_attrs(s->bucket_info, attrs, &s->bucket_info.objv_tracker, s->yield);
     });
 
+}
+
+int RGWGetBucketPublicAccessBlock::verify_permission()
+{
+  if (!verify_bucket_permission(this, s, rgw::IAM::s3GetBucketPolicy)) {
+    return -EACCES;
+  }
+
+  return 0;
+}
+
+void RGWGetBucketPublicAccessBlock::execute()
+{
+  auto attrs = s->bucket_attrs;
+  if (auto aiter = attrs.find(RGW_ATTR_PUBLIC_ACCESS);
+      aiter == attrs.end()) {
+    ldpp_dout(this, 0) << "can't find bucket IAM POLICY attr bucket_name = "
+		       << s->bucket_name << dendl;
+    // return the default;
+    return;
+  } else {
+    bufferlist::const_iterator iter{&aiter->second};
+    try {
+      access_conf.decode(iter);
+    } catch (const buffer::error& e) {
+      ldout(s->cct, 0) << __func__ <<  "decode object legal hold config failed" << dendl;
+      op_ret = -EIO;
+      return;
+    }
+  }
 }

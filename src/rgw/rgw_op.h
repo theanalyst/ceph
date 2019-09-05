@@ -48,7 +48,7 @@
 #include "rgw_object_lock.h"
 #include "cls/lock/cls_lock_client.h"
 #include "cls/rgw/cls_rgw_client.h"
-#include "rgw_public_acess.h"
+#include "rgw_public_access.h"
 
 #include "services/svc_sys_obj.h"
 #include "services/svc_tier_rados.h"
@@ -2358,15 +2358,28 @@ public:
   dmc::client_id dmclock_client() override { return dmc::client_id::metadata; }
 };
 
-class RGWPutPublicAccessBlock : public RGWOp {
+class RGWPutBucketPublicAccessBlock : public RGWOp {
 protected:
   bufferlist data;
   rgw::IAM::PublicAccessConfiguration access_conf;
 public:
   int verify_permission() override;
-  const char* name() const override { return "put_public_access_block";}
-  virtual RGWOpType get_type() override { return RGW_OP_PUT_PUBLIC_ACCESS_BLOCK; }
+  const char* name() const override { return "put_bucket_public_access_block";}
+  virtual RGWOpType get_type() override { return RGW_OP_PUT_BUCKET_PUBLIC_ACCESS_BLOCK; }
   virtual uint32_t op_mask() override { return RGW_OP_TYPE_WRITE; }
+  int get_params();
+  void execute() override;
+  dmc::client_id dmclock_client() override { return dmc::client_id::metadata; }
+};
+
+class RGWGetBucketPublicAccessBlock : public RGWOp {
+protected:
+  rgw::IAM::PublicAccessConfiguration access_conf;
+public:
+  int verify_permission() override;
+  const char* name() const override { return "get_bucket_public_access_block";}
+  virtual RGWOpType get_type() override { return RGW_OP_GET_BUCKET_PUBLIC_ACCESS_BLOCK; }
+  virtual uint32_t op_mask() override { return RGW_OP_TYPE_READ; }
   int get_params();
   void execute() override;
   dmc::client_id dmclock_client() override { return dmc::client_id::metadata; }
