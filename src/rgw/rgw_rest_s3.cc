@@ -3756,6 +3756,8 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_delete()
     return new RGWDeleteLC_ObjStore_S3;
   } else if(is_policy_op()) {
     return new RGWDeleteBucketPolicy;
+  } else if (is_block_public_access_op()) {
+    return new RGWDeleteBucketPublicAccessBlock;
   }
 
   if (s->info.args.sub_resource_exists("website")) {

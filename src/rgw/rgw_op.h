@@ -2385,6 +2385,20 @@ public:
   dmc::client_id dmclock_client() override { return dmc::client_id::metadata; }
 };
 
+class RGWDeleteBucketPublicAccessBlock : public RGWOp {
+protected:
+  rgw::IAM::PublicAccessConfiguration access_conf;
+public:
+  int verify_permission() override;
+  const char* name() const override { return "delete_bucket_public_access_block";}
+  virtual RGWOpType get_type() override { return RGW_OP_DELETE_BUCKET_PUBLIC_ACCESS_BLOCK; }
+  virtual uint32_t op_mask() override { return RGW_OP_TYPE_WRITE; }
+  int get_params();
+  void execute() override;
+  void send_response() override;
+  dmc::client_id dmclock_client() override { return dmc::client_id::metadata; }
+};
+
 static inline int parse_value_and_bound(
     const string &input,
     int &output,

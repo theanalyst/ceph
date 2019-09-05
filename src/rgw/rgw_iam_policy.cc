@@ -81,6 +81,7 @@ static const actpair actpairs[] =
  { "s3:GetBucketLogging", s3GetBucketLogging },
  { "s3:GetBucketNotification", s3GetBucketNotification },
  { "s3:GetBucketPolicy", s3GetBucketPolicy },
+ { "s3:GetBucketPublicAccessBlock", s3GetBucketPublicAccessBlock },
  { "s3:GetBucketRequestPayment", s3GetBucketRequestPayment },
  { "s3:GetBucketTagging", s3GetBucketTagging },
  { "s3:GetBucketVersioning", s3GetBucketVersioning },

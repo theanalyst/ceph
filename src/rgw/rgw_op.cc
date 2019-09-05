@@ -8003,3 +8003,34 @@ void RGWGetBucketPublicAccessBlock::execute()
     }
   }
 }
+
+
+void RGWDeleteBucketPublicAccessBlock::send_response()
+{
+  if (op_ret) {
+    set_req_state_err(s, op_ret);
+  }
+  dump_errno(s);
+  end_header(s);
+}
+
+int RGWDeleteBucketPublicAccessBlock::verify_permission()
+{
+  if (!verify_bucket_permission(this, s, rgw::IAM::s3PutBucketPublicAccessBlock)) {
+    return -EACCES;
+  }
+
+  return 0;
+}
+
+void RGWDeleteBucketPublicAccessBlock::execute()
+{
+  op_ret = retry_raced_bucket_write(store->getRados(), s, [this] {
+      auto attrs = s->bucket_attrs;
+      attrs.erase(RGW_ATTR_PUBLIC_ACCESS);
+      op_ret = store->ctl()->bucket->set_bucket_instance_attrs(s->bucket_info, attrs,
+							       &s->bucket_info.objv_tracker,
+							       s->yield);
+      return op_ret;
+    });
+}
