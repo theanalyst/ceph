@@ -3601,13 +3601,26 @@ void RGWGetBucketPolicyStatus_ObjStore_S3::send_response()
 
 }
 
-void RGWPutPublicAccessBlock_ObjStore_S3::send_response()
+void RGWPutBucketPublicAccessBlock_ObjStore_S3::send_response()
 {
   if (op_ret) {
     set_req_state_err(s, op_ret);
   }
   dump_errno(s);
   end_header(s);
+}
+
+void RGWGetBucketPublicAccessBlock_ObjStore_S3::send_response()
+{
+  if (op_ret) {
+    set_req_state_err(s, op_ret);
+  }
+  dump_errno(s);
+  end_header(s, this, "application/xml");
+  dump_start(s);
+
+  access_conf.dump_xml(s->formatter);
+  rgw_flush_formatter_and_reset(s, s->formatter);
 }
 
 RGWOp *RGWHandler_REST_Service_S3::op_get()
@@ -3729,6 +3742,8 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_get()
     return RGWHandler_REST_PSNotifs_S3::create_get_op();
   } else if (is_policy_status_op()) {
     return new RGWGetBucketPolicyStatus_ObjStore_S3;
+  } else if (is_block_public_access_op()) {
+    return new RGWGetBucketPublicAccessBlock_ObjStore_S3;
   }
   return get_obj_op(true);
 }
@@ -3755,7 +3770,6 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_put()
     }
     return new RGWSetBucketWebsite_ObjStore_S3;
   }
-  ldout(s->cct, 0) << "ABHI op_put eval "<< dendl;
   if (is_tagging_op()) {
     return new RGWPutBucketTags_ObjStore_S3;
   } else if (is_acl_op()) {
@@ -3773,7 +3787,7 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_put()
   } else if (is_notification_op()) {
     return RGWHandler_REST_PSNotifs_S3::create_put_op();
   } else if (is_block_public_access_op()) {
-    return new RGWPutPublicAccessBlock_ObjStore_S3;
+    return new RGWPutBucketPublicAccessBlock_ObjStore_S3;
   }
   return new RGWCreateBucket_ObjStore_S3;
 }
@@ -4658,7 +4672,9 @@ AWSGeneralAbstractor::get_auth_data_v4(const req_state* const s,
         case RGW_OP_PUT_OBJ_LEGAL_HOLD:
         case RGW_STS_GET_SESSION_TOKEN:
         case RGW_STS_ASSUME_ROLE:
-        case RGW_OP_PUT_PUBLIC_ACCESS_BLOCK:
+        case RGW_OP_PUT_BUCKET_PUBLIC_ACCESS_BLOCK:
+        case RGW_OP_GET_BUCKET_PUBLIC_ACCESS_BLOCK:
+        case RGW_OP_DELETE_BUCKET_PUBLIC_ACCESS_BLOCK:
           break;
         default:
           dout(10) << "ERROR: AWS4 completion for this operation NOT IMPLEMENTED" << dendl;
