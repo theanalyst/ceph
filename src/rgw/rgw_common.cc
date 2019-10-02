@@ -1362,7 +1362,10 @@ bool verify_object_permission(const DoutPrefixProvider* dpp, struct req_state * 
     return false;
   }
 
-  bool ret = object_acl->verify_permission(dpp, *s->auth.identity, s->perm_mask, perm);
+  bool ret = object_acl->verify_permission(dpp, *s->auth.identity, s->perm_mask, perm,
+					   nullptr, /* http_referrer */
+					   s->bucket_access_conf &&
+					   s->bucket_access_conf->ignore_public_acls());
   if (ret) {
     return true;
   }
@@ -1410,7 +1413,10 @@ bool verify_object_permission_no_policy(const DoutPrefixProvider* dpp,
     return false;
   }
 
-  bool ret = object_acl->verify_permission(dpp, *s->auth.identity, s->perm_mask, perm);
+  bool ret = object_acl->verify_permission(dpp, *s->auth.identity, s->perm_mask, perm,
+					   nullptr, /* http referrer */
+					   s->bucket_access_conf &&
+					   s->bucket_access_conf->ignore_public_acls());
   if (ret) {
     return true;
   }

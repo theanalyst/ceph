@@ -418,12 +418,14 @@ public:
   uint32_t get_perm(const DoutPrefixProvider* dpp,
                     const rgw::auth::Identity& auth_identity,
                     uint32_t perm_mask,
-                    const char * http_referer);
+                    const char * http_referer,
+                    bool IgnorePublicACLs=false);
   bool verify_permission(const DoutPrefixProvider* dpp,
                          const rgw::auth::Identity& auth_identity,
                          uint32_t user_perm_mask,
                          uint32_t perm,
-                         const char * http_referer = nullptr);
+                         const char * http_referer = nullptr,
+                         bool IgnorePublicACLs=false);
 
   void encode(bufferlist& bl) const {
     ENCODE_START(2, 2, bl);
