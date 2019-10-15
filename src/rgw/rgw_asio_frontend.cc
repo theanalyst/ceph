@@ -168,9 +168,14 @@ void handle_connection(boost::asio::io_context& context,
       auto y = optional_yield{context, yield};
       ret_code = process_request(env.store, env.rest, &req, env.uri_prefix,
                                  *env.auth_registry, &client, env.olog, y, scheduler);
+      if (ret_code < 0)
+	continue;
     }
 
-    if (ret_code <0 || !parser.keep_alive()) {
+    if (ec) {
+      ldout(cct,0) << "ABHI: got ec value" << ec.message() << dendl;
+    }
+    if (!parser.keep_alive()) {
       return;
     }
 

@@ -74,6 +74,7 @@ int RGWCivetWebFrontend::process(struct mg_connection*  const conn)
   if (ret < 0) {
     /* We don't really care about return code. */
     dout(20) << "process_request() returned " << ret << dendl;
+    return ret;
   }
 
   if (http_ret <= 0) {
