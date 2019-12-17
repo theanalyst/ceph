@@ -56,6 +56,7 @@
 #include "rgw_rest_sts.h"
 #include "rgw_rest_iam.h"
 #include "rgw_sts.h"
+#include "rgw_rest_s3control.h"
 
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_rgw
@@ -4190,6 +4191,18 @@ int RGWHandler_Auth_S3::init(rgw::sal::RGWRadosStore *store, struct req_state *s
 
   return RGWHandler_REST::init(store, state, cio);
 }
+
+RGWRESTMgr_S3::RGWRESTMgr_S3(bool _enable_s3website, bool _enable_sts,
+			     bool _enable_iam, bool _enable_pubsub,
+			     bool isS3ControlEnabled)
+  : enable_s3website(_enable_s3website),
+    enable_sts(_enable_sts),
+    enable_iam(_enable_iam),
+    enable_pubsub(_enable_pubsub) {
+  if (isS3ControlEnabled)
+    register_resource("v20180820", new RGWRESTMgr_S3Control);
+}
+
 
 RGWHandler_REST* RGWRESTMgr_S3::get_handler(struct req_state* const s,
                                             const rgw::auth::StrategyRegistry& auth_registry,
