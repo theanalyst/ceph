@@ -34,16 +34,32 @@ public:
   RGWHandler_REST* get_handler(struct req_state* const s,
                                const rgw::auth::StrategyRegistry& auth_registry,
                                const std::string&) override {
+    if (RGWHandler_REST_S3::init_from_header(s, RGW_FORMAT_XML, true) < 0) {
+      return nullptr;
+    }
+
     return new RGWHandler_S3AccountPublicAccessBlock(auth_registry);
   }
+};
+
+class RGWHandler_S3Control: public RGWHandler_REST_S3 {
+public:
+  using RGWHandler_REST_S3::RGWHandler_REST_S3;
+  ~RGWHandler_S3Control() override = default;
 };
 
 class RGWRESTMgr_S3Control : public RGWRESTMgr {
 public:
   ~RGWRESTMgr_S3Control() override = default;
   RGWRESTMgr_S3Control() {
-    register_resource("PublicAccessBlock",
+    register_resource("configuration/publicAccessBlock",
                       new RGWRESTMgr_S3AccountPublicAccessBlock());
+  }
+
+  RGWHandler_REST* get_handler(struct req_state*,
+			       const rgw::auth::StrategyRegistry& auth_registry,
+			       const std::string&) override {
+    return new RGWHandler_S3Control(auth_registry);
   }
 };
 
@@ -58,4 +74,5 @@ public:
   int get_params();
   RGWOpType get_type() override;
   void execute() override;
+  void send_response() override;
 };

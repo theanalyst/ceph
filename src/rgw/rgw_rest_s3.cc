@@ -4192,18 +4192,6 @@ int RGWHandler_Auth_S3::init(rgw::sal::RGWRadosStore *store, struct req_state *s
   return RGWHandler_REST::init(store, state, cio);
 }
 
-RGWRESTMgr_S3::RGWRESTMgr_S3(bool _enable_s3website, bool _enable_sts,
-			     bool _enable_iam, bool _enable_pubsub,
-			     bool isS3ControlEnabled)
-  : enable_s3website(_enable_s3website),
-    enable_sts(_enable_sts),
-    enable_iam(_enable_iam),
-    enable_pubsub(_enable_pubsub) {
-  if (isS3ControlEnabled)
-    register_resource("v20180820", new RGWRESTMgr_S3Control);
-}
-
-
 RGWHandler_REST* RGWRESTMgr_S3::get_handler(struct req_state* const s,
                                             const rgw::auth::StrategyRegistry& auth_registry,
                                             const std::string& frontend_prefix)
@@ -4690,6 +4678,10 @@ AWSGeneralAbstractor::get_auth_data_v4(const req_state* const s,
         case RGW_OP_PUT_BUCKET_PUBLIC_ACCESS_BLOCK:
         case RGW_OP_GET_BUCKET_PUBLIC_ACCESS_BLOCK:
         case RGW_OP_DELETE_BUCKET_PUBLIC_ACCESS_BLOCK:
+        case RGW_OP_PUT_ACCOUNT_PUBLIC_ACCESS_BLOCK:
+        case RGW_OP_GET_ACCOUNT_PUBLIC_ACCESS_BLOCK:
+        case RGW_OP_DELETE_ACCOUNT_PUBLIC_ACCESS_BLOCK:
+
           break;
         default:
           dout(10) << "ERROR: AWS4 completion for this operation NOT IMPLEMENTED" << dendl;

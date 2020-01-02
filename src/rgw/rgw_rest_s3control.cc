@@ -76,3 +76,12 @@ void RGWPutAccountPublicAccessBlock::execute()
 
   // TODO implement write!
 }
+
+void RGWPutAccountPublicAccessBlock::send_response()
+{
+  if (op_ret) {
+    set_req_state_err(s, op_ret);
+  }
+  dump_errno(s);
+  end_header(s);
+}

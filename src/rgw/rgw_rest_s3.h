@@ -725,9 +725,12 @@ private:
   const bool enable_iam;
   const bool enable_pubsub;
 public:
-  explicit RGWRESTMgr_S3(bool _enable_s3website=false, bool _enable_sts=false,
-			 bool _enable_iam=false, bool _enable_pubsub=false,
-			 bool isS3ControlEnabled=false);
+  explicit RGWRESTMgr_S3(bool _enable_s3website=false, bool _enable_sts=false, bool _enable_iam=false, bool _enable_pubsub=false)
+    : enable_s3website(_enable_s3website),
+      enable_sts(_enable_sts),
+      enable_iam(_enable_iam),
+      enable_pubsub(_enable_pubsub) {
+  }
 
   ~RGWRESTMgr_S3() override = default;
 
