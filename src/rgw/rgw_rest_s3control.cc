@@ -1,6 +1,7 @@
 #include "rgw_rest_s3control.h"
 #include "rgw_common.h"
 #include "rgw_op.h"
+#include "services/svc_zone.h"
 
 RGWOp* RGWHandler_S3AccountPublicAccessBlock::op_put()
 {
@@ -63,13 +64,13 @@ void RGWPutAccountPublicAccessBlock::execute()
     return;
   }
 
-  // if (!store->svc()->zone->is_meta_master()) {
-  //   op_ret = forward_request_to_master(s, NULL, store, data, nullptr);
-  //   if (op_ret < 0) {
-  //     ldpp_dout(this, 0) << "forward_request_to_master returned ret=" << op_ret << dendl;
-  //     return;
-  //   }
-  // }
+  if (!store->svc()->zone->is_meta_master()) {
+    op_ret = forward_request_to_master(s, NULL, store, data, nullptr);
+    if (op_ret < 0) {
+      ldpp_dout(this, 0) << "forward_request_to_master returned ret=" << op_ret << dendl;
+      return;
+    }
+  }
 
   bufferlist bl;
   access_conf.encode(bl);
