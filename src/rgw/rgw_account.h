@@ -90,7 +90,8 @@ WRITE_CLASS_ENCODER(RGWAccountInfo)
 class RGWAccountCtl
 {
 public:
-  int add_user(const rgw_user& user);
+  int add_user(const std::string& account_id,
+	       const rgw_user& user);
   int add_role(const RGWRole& role);
 
   int list_users();
@@ -105,6 +106,11 @@ public:
   int store_info(const RGWAccountInfo& info,
 		 optional_yield y);
 
+  int read_info(RGWAccountInfo* info,
+		optional_yield y);
+
+  int remove_info(const RGWAccountInfo& info,
+		  optional_yield y);
   // TODO
   // get_info_by_tenant()
 };
