@@ -75,33 +75,38 @@ int RGWSI_Role_RADOS::store_path(RGWSI_MetaBackend::Context *ctx,
 }
 
 
-int RGWSI_Role_RADOS::read_info(RGWSI_MetaBackend::Context *ctx,
-                                const std::string& role_id,
-                                RGWRole *role,
-                                RGWObjVersionTracker * const objv_tracker,
-                                real_time * const pmtime,
-                                map<std::string, bufferlist> * pattrs,
-                                optional_yield y)
+RoleReadRet RGWSI_Role_RADOS::read_info(RGWSI_MetaBackend::Context *ctx,
+                                        const std::string& role_id,
+                                        RGWRole *role,
+                                        RGWObjVersionTracker * const objv_tracker,
+                                        real_time * const pmtime,
+                                        map<std::string, bufferlist> * pattrs,
+                                        optional_yield y)
 {
   bufferlist data_bl;
-  RGWSI_MBSObj_GetParams params(&data_bl, pattrs, pmtime);
+  map<std::string, bufferlist> attrs;
+  real_time mtime;
+  RGWSI_MBSObj_GetParams params(&data_bl, &attrs, &mtime);
 
   int r = svc.meta_be->get_entry(ctx, get_role_meta_key(role_id), params, objv_tracker, y);
   if (r < 0)
-    return r;
+    return std::make_tuple(r, std::nullopt);
 
+  RGWRole _role;
   auto bl_iter = data_bl.cbegin();
   try  {
-    decode(*role, bl_iter);
+    decode(_role, bl_iter);
   } catch (buffer::error& err) {
     ldout(svc.meta_be->ctx(),0) << "ERROR: failed to decode RGWRole, caught buffer::err " << dendl;
-    return -EIO;
+    return std::make_tuple(-EIO,std::nullopt);
   }
 
-  return 0;
+  return std::make_tuple(r, RGWSI_Read_Role(std::move(_role),
+                                            std::move(attrs),
+                                            std::move(mtime)));
 }
 
-int RGWSI_Role_RADOS::read_name(RGWSI_MetaBackend::Context *ctx,
+StringReadRet RGWSI_Role_RADOS::read_name(RGWSI_MetaBackend::Context *ctx,
                                 const std::string& name,
                                 const std::string& tenant,
                                 std::string& role_id,
@@ -110,12 +115,14 @@ int RGWSI_Role_RADOS::read_name(RGWSI_MetaBackend::Context *ctx,
                                 optional_yield y)
 {
   bufferlist data_bl;
-  RGWSI_MBSObj_GetParams params(&data_bl, nullptr, pmtime);
+  map<std::string, bufferlist> attrs;
+  real_time mtime;
+  RGWSI_MBSObj_GetParams params(&data_bl, &attrs, &mtime);
 
   int r = svc.meta_be->get_entry(ctx, get_role_name_meta_key(name, tenant),
                                  params, objv_tracker, y);
   if (r < 0)
-    return r;
+    return std::make_tuple(r, std::nullopt);
 
   auto bl_iter = data_bl.cbegin();
   RGWNameToId nameToId;
@@ -123,11 +130,14 @@ int RGWSI_Role_RADOS::read_name(RGWSI_MetaBackend::Context *ctx,
     decode(nameToId, bl_iter);
   } catch (buffer::error& err) {
     ldout(svc.meta_be->ctx(),0) << "ERROR: failed to decode RGWRole name, caught buffer::err " << dendl;
-    return -EIO;
+    return std::make_tuple(-EIO, std::nullopt);
   }
 
   role_id = nameToId.obj_id;
-  return 0;
+
+  return std::make_tuple(r, RGWSI_Read_String(std::move(role_id),
+                                              std::move(attrs),
+                                              std::move(mtime)));
 }
 
 static int delete_oid(RGWSI_MetaBackend::Context *ctx,

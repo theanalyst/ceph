@@ -20,6 +20,23 @@
 
 class RGWRole;
 
+template <typename T>
+struct RGWSI_Read_Ret {
+  T info;
+  map<std::string, bufferlist> attrs;
+  real_time mtime;
+
+  RGWSI_Read_Ret(T&& _info, map<std::string, bufferlist>&& _attrs, real_time&& _mtime) :
+    info(std::move(_info)), attrs(std::move(_attrs)), mtime(std::move(_mtime)) {}
+};
+
+using RGWSI_Read_bl = RGWSI_Read_Ret<ceph::bufferlist>;
+using RGWSI_Read_Role = RGWSI_Read_Ret<RGWRole>;
+using RGWSI_Read_String = RGWSI_Read_Ret<std::string>;
+
+using RoleReadRet = std::tuple<int,std::optional<RGWSI_Read_Role>>;
+using StringReadRet = std::tuple<int,std::optional<RGWSI_Read_String>>;
+
 class RGWSI_Role: public RGWServiceInstance
 {
  public:
@@ -57,27 +74,27 @@ class RGWSI_Role: public RGWServiceInstance
 			 bool exclusive,
 			 optional_yield y) = 0;
 
-  virtual int read_info(RGWSI_MetaBackend::Context *ctx,
-			const std::string& role_id,
-			RGWRole *role,
-			RGWObjVersionTracker * const objv_tracker,
-			real_time * const pmtime,
-			map<std::string, bufferlist> * pattrs,
-			optional_yield y) = 0;
+  virtual RoleReadRet read_info(RGWSI_MetaBackend::Context *ctx,
+				  const std::string& role_id,
+				  RGWRole *role,
+				  RGWObjVersionTracker * const objv_tracker,
+				  real_time * const pmtime,
+				  map<std::string, bufferlist> * pattrs,
+				  optional_yield y) = 0;
 
-  virtual int read_name(RGWSI_MetaBackend::Context *ctx,
-			const std::string& name,
-			const std::string& tenant,
-			std::string& role_id,
-			RGWObjVersionTracker * const objv_tracker,
-			real_time * const pmtime,
-			optional_yield y) = 0;
+  virtual StringReadRet read_name(RGWSI_MetaBackend::Context *ctx,
+				    const std::string& name,
+				    const std::string& tenant,
+				    std::string& role_id,
+				    RGWObjVersionTracker * const objv_tracker,
+				    real_time * const pmtime,
+				    optional_yield y) = 0;
 
-  virtual int read_path(RGWSI_MetaBackend::Context *ctx,
-			std::string& path,
-			RGWObjVersionTracker * const objv_tracker,
-			real_time * const pmtime,
-			optional_yield y) = 0;
+  virtual StringReadRet read_path(RGWSI_MetaBackend::Context *ctx,
+				    std::string& path,
+				    RGWObjVersionTracker * const objv_tracker,
+				    real_time * const pmtime,
+				    optional_yield y) = 0;
 
   virtual int delete_info(RGWSI_MetaBackend::Context *ctx,
 			  const std::string& name,

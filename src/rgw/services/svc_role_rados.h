@@ -64,27 +64,27 @@ class RGWSI_Role_RADOS: public RGWSI_Role
   		 bool exclusive,
   		 optional_yield y) override;
 
-  int read_info(RGWSI_MetaBackend::Context *ctx,
-		const std::string& role_id,
-  		RGWRole *role,
-  		RGWObjVersionTracker * const objv_tracker,
-  		real_time * const pmtime,
-  		map<std::string, bufferlist> * pattrs,
-  		optional_yield y) override;
+  RoleReadRet read_info(RGWSI_MetaBackend::Context *ctx,
+			const std::string& role_id,
+			RGWRole *role,
+			RGWObjVersionTracker * const objv_tracker,
+			real_time * const pmtime,
+			map<std::string, bufferlist> * pattrs,
+			optional_yield y) override;
 
-  int read_name(RGWSI_MetaBackend::Context *ctx,
-		const std::string& name,
-		const std::string& tenant,
-		std::string& role_id,
-  		RGWObjVersionTracker * const objv_tracker,
-  		real_time * const pmtime,
-  		optional_yield y) override;
+  StringReadRet read_name(RGWSI_MetaBackend::Context *ctx,
+			  const std::string& name,
+			  const std::string& tenant,
+			  std::string& role_id,
+			  RGWObjVersionTracker * const objv_tracker,
+			  real_time * const pmtime,
+			  optional_yield y) override;
 
-  int read_path(RGWSI_MetaBackend::Context *ctx,
-  		std::string& path,
-  		RGWObjVersionTracker * const objv_tracker,
-  		real_time * const pmtime,
-  		optional_yield y) override;
+  StringReadRet read_path(RGWSI_MetaBackend::Context *ctx,
+			  std::string& path,
+			  RGWObjVersionTracker * const objv_tracker,
+			  real_time * const pmtime,
+			  optional_yield y) override;
 
   int delete_info(RGWSI_MetaBackend::Context *ctx,
 		  const std::string& name,
