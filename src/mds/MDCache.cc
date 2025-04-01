@@ -10021,6 +10021,10 @@ void MDCache::request_forward(const MDRequestRef& mdr, mds_rank_t who, int port)
 
 void MDCache::dispatch_request(const MDRequestRef& mdr)
 {
+  if (!mdr) {
+    dout(0) << __func__ << ": received a null request!"  << dendl;
+    return;
+  }
   if (mdr->dead) {
     dout(20) << __func__ << ": dead " << *mdr << dendl;
     return;
